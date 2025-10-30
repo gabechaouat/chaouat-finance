@@ -6,7 +6,6 @@ import plotly.express as px
 import plotly.io as pio
 import streamlit as st
 import yfinance as yf
-@st.cache_data(ttl=24*60*60)
 
 @st.cache_data(ttl=24*60*60)
 def load_sp500_df():
@@ -312,6 +311,16 @@ with st.sidebar:
     st.subheader("Chart mode")
     chart_mode = st.radio("What to overlay?", ["Price", "Rolling Volatility"], horizontal=True)
 
+    # >>> Add these four lines (this defines lookback_days and run_scan) <<<
+    st.divider()
+    st.subheader("Cross-section scan")
+    lookback_days = st.slider(
+        "Lookback (trading days) for scan", 20, 252, 60, key="scan_lookback",
+        help="Window used to rank highest/lowest volatility across the S&P 500."
+    )
+    run_scan = st.checkbox("Show Top 5 / Bottom 5 volatility lists", value=True, key="scan_toggle")
+    # <<< end inserted lines >>>
+
     st.divider()
     ttl_minutes = st.number_input("Data cache TTL (minutes)", min_value=1, value=60)
     refresh = st.button("Force refresh now")
@@ -483,6 +492,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
