@@ -1,11 +1,93 @@
 import math
 from datetime import date, timedelta
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.io as pio
 import streamlit as st
 import yfinance as yf
+
+# --- Page and style setup ---
+st.set_page_config(page_title="Chaouat Finance", page_icon="💹", layout="wide")
+pio.templates.default = "plotly_white"
+
+# --- Custom CSS: Montserrat + cerulean design + header ---
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
+:root{
+  --primary:#007BA7;        /* cerulean */
+  --primary-dark:#005F7D;
+  --accent:#00B0FF;
+  --bg:#F7FAFC;
+  --card:#FFFFFF;
+  --text:#0F172A;
+  --muted:#64748B;
+}
+
+html, body, [class*="css"]  {
+  font-family: 'Montserrat', sans-serif !important;
+}
+
+.cf-hero{
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: #fff;
+  padding: 28px 32px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0,123,167,.25);
+  margin: 8px 0 24px 0;
+}
+.cf-brand{
+  font-weight: 700;
+  font-size: 40px;
+  letter-spacing: .4px;
+}
+.cf-sub{
+  margin-top: 6px;
+  opacity: .95;
+}
+
+/* Buttons */
+.stButton>button, .stDownloadButton>button{
+  background: var(--primary) !important;
+  color: #fff !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  padding: 10px 16px !important;
+}
+.stButton>button:hover, .stDownloadButton>button:hover{
+  background: var(--primary-dark) !important;
+}
+
+/* Card styling for metric box */
+.metric-card{
+  background: var(--card);
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(15,23,42,.06);
+}
+
+/* Footer */
+small, .cf-foot{
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 24px;
+  display: block;
+  text-align: center;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# --- Branded header ---
+st.markdown("""
+<div class="cf-hero">
+  <div class="cf-brand">Chaouat Finance</div>
+  <div class="cf-sub">Clean, fast analytics for price trends and risk.</div>
+</div>
+""", unsafe_allow_html=True)
+
 
 st.set_page_config(page_title="Stock Volatility Dashboard", layout="wide")
 st.title("Stock Volatility Dashboard")
@@ -96,12 +178,26 @@ latest_vol = float(latest["vol_annualized"]) if latest is not None else None
 col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"Price: {ticker}")
-    fig_price = px.line(x=prices["Date"], y=prices["Close"],
-                    labels={"x": "Date", "y": "Adj. Close ($)"})
+    fig_price = px.line(
+    x=prices["Date"], y=prices["Close"],
+    labels={"x": "Date", "y": "Adj. Close ($)"},
+    color_discrete_sequence=["#007BA7"]
+)
     fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
     st.plotly_chart(fig_price, use_container_width=True)
 with col2:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
     st.subheader("Latest stats")
+    if latest is not None:
+        st.metric("Annualized Volatility", f"{latest_vol:.2%}",
+                  help="Std dev of daily returns over the selected window, annualized by √252.")
+        st.write(f"Window: **{vol_window}** trading days")
+        st.write(f"Returns: **{'log' if use_log_returns else 'simple'}**")
+        st.write(f"Data through: **{latest['Date'].date()}**")
+    else:
+        st.info("Insufficient data for the selected window.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
     if latest is not None:
         st.metric("Annualized Volatility", f"{latest_vol:.2%}",
                   help="Std dev of daily returns over the selected window, annualized by √252.")
@@ -112,8 +208,11 @@ with col2:
         st.info("Insufficient data for the selected window.")
 
 st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
-fig_vol = px.line(x=prices["Date"], y=prices["vol_annualized"],
-                  labels={"x": "Date", "y": "Ann. Volatility"})
+fig_vol = px.line(
+    x=prices["Date"], y=prices["vol_annualized"],
+    labels={"x": "Date", "y": "Ann. Volatility"},
+    color_discrete_sequence=["#005F7D"]
+)
 fig_vol.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
 st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -126,6 +225,9 @@ st.download_button("Download CSV",
                    mime="text/csv")
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
+st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
+
 
 
 
