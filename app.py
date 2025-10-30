@@ -106,7 +106,50 @@ def scan_volatility(tickers: list[str], lookback_days: int, use_log: bool) -> pd
     df = pd.DataFrame(out, columns=["Ticker", "AnnVol"]).dropna()
     df = df.sort_values("AnnVol", ascending=False).reset_index(drop=True)
     return df
+@st.cache_data(show_spinner=True)
+def fetch_history_multi(syms: list[str], start_d, end_d):
+    """Batch download and return a tidy DataFrame: Date, Ticker, Close."""
+    if not syms:
+        return pd.DataFrame(columns=["Date", "Ticker", "Close"])
+    data = yf.download(
+        syms, start=start_d, end=end_d, interval="1d",
+        auto_adjust=True, progress=False, group_by="ticker", threads=True
+    )
+    rows = []
+    if isinstance(data.columns, pd.MultiIndex):
+        for s in syms:
+            try:
+                close = data[(s, "Close")].dropna()
+                df_s = close.rename("Close").reset_index().rename(columns={"index": "Date"})
+                df_s["Ticker"] = s
+                rows.append(df_s[["Date", "Ticker", "Close"]])
+            except Exception:
+                pass
+    else:
+        # Single-level: only one ticker
+        close = data["Close"].dropna()
+        df_s = close.rename("Close").reset_index().rename(columns={"index": "Date"})
+        df_s["Ticker"] = syms[0]
+        rows.append(df_s[["Date", "Ticker", "Close"]])
+    if not rows:
+        return pd.DataFrame(columns=["Date", "Ticker", "Close"])
+    out = pd.concat(rows, ignore_index=True)
+    out["Date"] = pd.to_datetime(out["Date"], errors="coerce")
+    out = out.dropna(subset=["Date", "Close"])
+    return out
 
+
+def compute_rolling_vol(df_prices: pd.DataFrame, window: int, use_log: bool) -> pd.DataFrame:
+    """Input tidy prices (Date, Ticker, Close). Return tidy rolling vol with AnnVol column."""
+    if df_prices.empty:
+        return pd.DataFrame(columns=["Date", "Ticker", "AnnVol"])
+    df = df_prices.sort_values(["Ticker", "Date"]).copy()
+    df["ret"] = df.groupby("Ticker")["Close"].apply(
+        lambda s: np.log(s).diff() if use_log else s.pct_change()
+    ).reset_index(level=0, drop=True)
+    df["vol_daily"] = df.groupby("Ticker")["ret"].rolling(window).std().reset_index(level=0, drop=True)
+    df["AnnVol"] = df["vol_daily"] * math.sqrt(252)
+    return df.dropna(subset=["AnnVol"])
 
 def load_tickers():
     # S&P 500 symbols (fast and lightweight). You can swap this URL later.
@@ -246,27 +289,36 @@ st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
 with st.sidebar:
     st.header("Settings")
 
-    tickers = load_tickers()
-    ticker = st.selectbox(
-        "Ticker (type to search)",
-        options=tickers,
-        index=tickers.index("AAPL") if "AAPL" in tickers else 0,
-        help="Start typing letters to filter (e.g., AA → AAPL)."
-    )
+    sp500 = load_sp500_df()
+    sp_syms = sp500["Symbol"].dropna().unique().tolist()
 
-    custom = st.text_input("Or enter any symbol (optional)").strip().upper()
+    pick = st.multiselect(
+        "Select up to 4 tickers (type to search)",
+        options=sp_syms,
+        default=["AAPL"],
+        max_selections=4,
+        help="Start typing (e.g., NVDA, MSFT)."
+    )
+    custom = st.text_input("Optional extra symbols (comma-separated)").strip()
     if custom:
-        ticker = custom
+        extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
+        pick = (pick + extra)[:4]  # enforce max 4 total
 
     years = st.slider("History (years)", 1, 10, 5)
     vol_window = st.slider("Rolling volatility window (trading days)", 5, 252, 20)
     use_log_returns = st.toggle("Use log returns (recommended)", True)
-    ttl_minutes = st.number_input("Auto refresh cache TTL (minutes)", min_value=1, value=60)
-    refresh = st.button("Force refresh now")
+
     st.divider()
-    st.subheader("Cross-section scan")
-    lookback_days = st.slider("Lookback (trading days) for scan", 20, 252, 60, help="Used to rank top/bottom volatility across the S&P 500.")
-    run_scan = st.checkbox("Show Top 5 / Bottom 5 volatility lists", value=True)
+    st.subheader("Chart mode")
+    chart_mode = st.radio("What to overlay?", ["Price", "Rolling Volatility"], horizontal=True)
+
+    st.divider()
+    ttl_minutes = st.number_input("Data cache TTL (minutes)", min_value=1, value=60)
+    refresh = st.button("Force refresh now")
+
+# date range AFTER sidebar variables exist
+start = dt.date.today() - dt.timedelta(days=365 * years)
+end = dt.date.today()
 
 company_name, company_logo = get_company_meta(ticker)
 
@@ -343,17 +395,19 @@ prices["vol_annualized"] = prices["vol_daily"] * math.sqrt(252)
 latest = prices.dropna().iloc[-1] if not prices.dropna().empty else None
 latest_vol = float(latest["vol_annualized"]) if latest is not None else None
 
-# === CHART + STATS IN ONE ROW ===
+# === CHART + COMPARISON STATS IN ONE ROW ===
 left, right = st.columns([2.5, 1], gap="large")
 
 with left:
-    # Header line: logo + "TICKER — Company Name"
+    # For the header, show first selected company name + logo (optional)
+    first_ticker = pick[0]
+    company_name, company_logo = get_company_meta(first_ticker)
     if company_logo:
         st.markdown(
             f"""
             <div class="cf-stockline">
-              <img src="{company_logo}" alt="{ticker} logo" class="cf-logo"/>
-              <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
+              <img src="{company_logo}" alt="{first_ticker} logo" class="cf-logo"/>
+              <div class="cf-stocktext"><b>{' / '.join(pick)}</b> — {company_name}</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -362,33 +416,65 @@ with left:
         st.markdown(
             f"""
             <div class="cf-stockline">
-              <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
+              <div class="cf-stocktext"><b>{' / '.join(pick)}</b></div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-    # Chart
-    fig_price = px.line(
-        x=prices["Date"], y=prices["Close"],
-        labels={"x": "Date", "y": "Adj. Close ($)"},
-        color_discrete_sequence=["#007BA7"]
-    )
-    fig_price.update_layout(height=440, margin=dict(l=10, r=10, t=30, b=10))
-    st.plotly_chart(fig_price, use_container_width=True)
+    if chart_mode == "Price":
+        fig = px.line(
+            prices_all,
+            x="Date", y="Close", color="Ticker",
+            labels={"Close": "Adj. Close ($)", "Date": "Date"},
+        )
+        fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+
+    else:  # Rolling Volatility
+        vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+        fig = px.line(
+            vol_df,
+            x="Date", y="AnnVol", color="Ticker",
+            labels={"AnnVol": "Annualized Volatility", "Date": "Date"},
+        )
+        fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig, use_container_width=True)
 
 with right:
-    # Stats card next to the chart
+    # Build comparative stats table
+    # Latest price per ticker
+    last_prices = prices_all.sort_values("Date").groupby("Ticker").tail(1)[["Ticker", "Close"]].set_index("Ticker")["Close"]
+
+    # YTD return
+    ytd_start = dt.date(dt.date.today().year, 1, 1)
+    ytd_prices = prices_all[prices_all["Date"] >= pd.to_datetime(ytd_start)].copy()
+    ytd_first = ytd_prices.sort_values("Date").groupby("Ticker").head(1).set_index("Ticker")["Close"]
+    ytd_ret = ((last_prices / ytd_first) - 1).replace([np.inf, -np.inf], np.nan)
+
+    # Latest annualized vol using the chosen window
+    vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+    last_vol = vol_df.sort_values("Date").groupby("Ticker").tail(1).set_index("Ticker")["AnnVol"]
+
+    # Assemble
+    comp = pd.DataFrame({
+        "Last Price ($)": last_prices.round(2),
+        f"Vol {vol_window}d (ann)": (last_vol * 100).round(2).astype(float),
+        "YTD Return (%)": (ytd_ret * 100).round(2).astype(float),
+    })
+    comp = comp.reindex(pick)  # preserve selection order
+
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.subheader("Latest stats")
-    if latest is not None:
-        st.metric("Annualized Volatility", f"{latest_vol:.2%}",
-                  help="Std dev of daily returns over the selected window, annualized by √252.")
-        st.write(f"Window: **{vol_window}** trading days")
-        st.write(f"Returns: **{'log' if use_log_returns else 'simple'}**")
-        st.write(f"Data through: **{latest['Date'].date()}**")
-    else:
-        st.info("Insufficient data for the selected window.")
+    st.subheader("Comparison")
+    st.dataframe(
+        comp,
+        use_container_width=True,
+        column_config={
+            "Last Price ($)": st.column_config.NumberColumn(format="%.2f"),
+            f"Vol {vol_window}d (ann)": st.column_config.NumberColumn(format="%.2f%%"),
+            "YTD Return (%)": st.column_config.NumberColumn(format="%.2f%%"),
+        }
+    )
     st.markdown('</div>', unsafe_allow_html=True)
     
 st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
@@ -468,6 +554,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
