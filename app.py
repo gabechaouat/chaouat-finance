@@ -104,7 +104,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-st.set_page_config(page_title="Stock Volatility Dashboard", layout="wide")
 st.title("Stock Volatility Dashboard")
 st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
 
@@ -133,8 +132,8 @@ with st.sidebar:
 start = dt.date.today() - dt.timedelta(days=365 * years)
 end = dt.date.today()
 
-@st.cache_data(ttl=int(ttl_minutes) * 60, show_spinner=True)
-def fetch_history(sym: str, start_d: date, end_d: date) -> pd.DataFrame:
+@st.cache_data(show_spinner=True)  # simpler, avoids using ttl_minutes at import time
+def fetch_history(sym: str, start_d, end_d) -> pd.DataFrame:
     df = yf.download(sym, start=start_d, end=end_d, interval="1d", auto_adjust=True)
     df = df.rename_axis("Date").reset_index()
     return df
@@ -246,6 +245,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
