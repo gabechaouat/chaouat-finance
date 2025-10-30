@@ -41,8 +41,15 @@ except Exception as e:
     st.error(f"Error fetching data: {e}")
     st.stop()
 
-prices = raw[["Date", "Close"]].dropna().copy()
-prices["Date"] = pd.to_datetime(prices["Date"])
+prices = raw[["Date", "Close"]].copy()
+prices["Date"] = pd.to_datetime(prices["Date"], errors="coerce")
+prices["Close"] = pd.to_numeric(prices["Close"], errors="coerce")
+prices = prices.dropna(subset=["Date", "Close"]).reset_index(drop=True)
+
+# Guard: stop if columns missing or frame empty
+if prices.empty or not {"Date", "Close"}.issubset(prices.columns):
+    st.error(f"Unexpected data shape. Columns: {list(raw.columns)}")
+    st.stop()
 prices["ret"] = np.log(prices["Close"]).diff() if use_log_returns else prices["Close"].pct_change()
 prices["vol_daily"] = prices["ret"].rolling(vol_window).std()
 prices["vol_annualized"] = prices["vol_daily"] * math.sqrt(252)
@@ -53,7 +60,8 @@ latest_vol = float(latest["vol_annualized"]) if latest is not None else None
 col1, col2 = st.columns([2, 1])
 with col1:
     st.subheader(f"Price: {ticker}")
-    fig_price = px.line(prices, x="Date", y="Close", labels={"Close": "Adj. Close ($)"})
+    fig_price = px.line(x=prices["Date"], y=prices["Close"],
+                    labels={"x": "Date", "y": "Adj. Close ($)"})
     fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
     st.plotly_chart(fig_price, use_container_width=True)
 with col2:
@@ -68,7 +76,8 @@ with col2:
         st.info("Insufficient data for the selected window.")
 
 st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
-fig_vol = px.line(prices, x="Date", y="vol_annualized", labels={"vol_annualized": "Ann. Volatility"})
+fig_vol = px.line(x=prices["Date"], y=prices["vol_annualized"],
+                  labels={"x": "Date", "y": "Ann. Volatility"})
 fig_vol.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
 st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -81,4 +90,5 @@ st.download_button("Download CSV",
                    mime="text/csv")
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
+
 
