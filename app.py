@@ -132,6 +132,17 @@ html, body, * {
   padding: 16px;
   box-shadow: 0 2px 8px rgba(15,23,42,.06);
 }
+/* Stock line header (logo + text, perfectly aligned) */
+.cf-stockline{
+  display:flex; align-items:center; gap:12px;
+  margin: 0 0 8px 4px;
+}
+.cf-logo{
+  width:32px; height:32px; object-fit:contain;
+}
+.cf-stocktext{
+  font-size:22px; font-weight:700; color:#0F172A;
+}
 
 /* Footer */
 small, .cf-foot{
@@ -269,32 +280,36 @@ with col1:
 
     # --- “TICKER — Company name” + logo side by side ---
 
-# First, text annotation (shifted right to leave space for the logo)
-fig_price.add_annotation(
-    xref="paper", yref="paper",
-    x=0.13, y=1.12,  # move slightly right and down
-    showarrow=False,
-    text=f"<b>{ticker}</b> — {company_name}",
-    font=dict(size=22, color="#0F172A")
-)
 
-# Then, the logo on the left
-if company_logo:
-    fig_price.add_layout_image(dict(
-        source=company_logo,
-        xref="paper", yref="paper",
-        x=0.06, y=1.11,           # fine-tuned horizontal alignment
-        sizex=0.07, sizey=0.07,   # good scale to match text height
-        xanchor="right", yanchor="middle",
-        layer="above"
-    ))
 
 # Increase top margin to make space
-fig_price.update_layout(margin=dict(l=10, r=10, t=100, b=10))
+fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
 
 
 
 st.plotly_chart(fig_price, use_container_width=True)
+
+# Header line: logo + "TICKER — Company Name"
+if company_logo:
+    st.markdown(
+        f"""
+        <div class="cf-stockline">
+          <img src="{company_logo}" alt="{ticker} logo" class="cf-logo"/>
+          <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.markdown(
+        f"""
+        <div class="cf-stockline">
+          <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 
 with col2:
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
@@ -329,6 +344,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
