@@ -283,14 +283,14 @@ if company_logo:
     fig_price.add_layout_image(dict(
         source=company_logo,
         xref="paper", yref="paper",
-        x=0.0, y=1.20,           # higher up so it's above text
-        sizex=0.12, sizey=0.12,  # make it bigger
-        xanchor="left", yanchor="top",
+        x=0.06, y=1.11,           # fine-tuned horizontal alignment
+        sizex=0.07, sizey=0.07,   # good scale to match text height
+        xanchor="right", yanchor="middle",
         layer="above"
     ))
 
 # Increase top margin to make space
-fig_price.update_layout(margin=dict(l=10, r=10, t=130, b=10))
+fig_price.update_layout(margin=dict(l=10, r=10, t=100, b=10))
 
 
 
@@ -329,6 +329,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
