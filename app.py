@@ -1,5 +1,5 @@
 import math
-from datetime import date, timedelta
+import datetime as dt
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -126,8 +126,8 @@ if custom:
     ttl_minutes = st.number_input("Auto refresh cache TTL (minutes)", min_value=1, value=60)
     refresh = st.button("Force refresh now")
 
-start = date.today() - timedelta(days=365 * years)
-end = date.today()
+start = dt.date.today() - dt.timedelta(days=365 * years)
+end = dt.date.today()
 
 @st.cache_data(ttl=int(ttl_minutes) * 60, show_spinner=True)
 def fetch_history(sym: str, start_d: date, end_d: date) -> pd.DataFrame:
@@ -242,6 +242,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
