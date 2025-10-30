@@ -253,6 +253,14 @@ html, body, * {
 .cf-stocktext{
   font-size:22px; font-weight:700; color:#0F172A;
 }
+/* Fix st.metric values getting truncated with ellipsis */
+[data-testid="stMetricValue"]{
+  font-size: 24px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
 
 /* Footer */
 small, .cf-foot{
@@ -285,6 +293,17 @@ st.markdown("""
 st.title("Stock Volatility Dashboard")
 st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
 
+# Optional: deep-link into a ticker with ?sym=XXXX
+qp = st.query_params
+if "sym" in qp:
+    _sym_qs = qp["sym"]
+    if isinstance(_sym_qs, str):
+        default_pick = [_sym_qs.upper()]
+    else:
+        default_pick = [s.upper() for s in _sym_qs][:4]
+else:
+    default_pick = ["AAPL"]
+
 with st.sidebar:
     st.header("Settings")
 
@@ -294,7 +313,7 @@ with st.sidebar:
     pick = st.multiselect(
         "Select up to 4 tickers (type to search)",
         options=sp_syms,
-        default=["AAPL"],
+        default=default_pick,
         max_selections=4,
         help="Start typing (e.g., NVDA, MSFT)."
     )
@@ -472,47 +491,66 @@ if run_scan:
         top5 = scan_df.head(5).copy()
         bot5 = scan_df.sort_values("AnnVol", ascending=True).head(5).copy()
 
-        # Format percent for labels
-        top5["Vol%"] = (top5["AnnVol"] * 100).round(2)
-        bot5["Vol%"] = (bot5["AnnVol"] * 100).round(2)
+        # Format percent for labels (as strings) and keep numeric for axis
+        top5["VolPct"] = (top5["AnnVol"] * 100).round(2)
+        top5["VolPctStr"] = top5["VolPct"].astype(str) + "%"
+        bot5["VolPct"] = (bot5["AnnVol"] * 100).round(2)
+        bot5["VolPctStr"] = bot5["VolPct"].astype(str) + "%"
+
+        # Nice blue palettes
+        blues_top = px.colors.sequential.Blues[-5:]       # darker blues for Top 5
+        blues_bot = px.colors.sequential.Blues[2:7]       # lighter blues for Bottom 5
 
         leftc, rightc = st.columns(2, gap="large")
 
         with leftc:
             st.markdown("**Top 5 highest volatility**")
             fig_top = px.bar(
-                top5,
-                x="Ticker",
-                y="AnnVol",
-                text=top5["Vol%"].astype(str) + "%",
-                color_discrete_sequence=["#C2410C"]  # warm accent
+                top5, x="Ticker", y="AnnVol", text="VolPctStr",
             )
-            fig_top.update_traces(textposition="outside")
+            fig_top.update_traces(
+                marker_color=blues_top,
+                textposition="outside",
+                textfont=dict(size=12),
+                hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
+                customdata=top5["AnnVol"],
+            )
             fig_top.update_layout(
                 yaxis_title="Annualized Volatility",
                 xaxis_title="",
-                height=320,
-                margin=dict(l=10, r=10, t=30, b=10)
+                height=340,
+                margin=dict(l=10, r=10, t=30, b=10),
+                showlegend=False,
             )
             st.plotly_chart(fig_top, use_container_width=True)
+
+            # Clickable ticker links under the chart
+            links = " · ".join([f'<a href="?sym={s}">{s}</a>' for s in top5["Ticker"]])
+            st.markdown(f'<div style="margin-top:-6px;color:#005F7D">{links}</div>', unsafe_allow_html=True)
 
         with rightc:
             st.markdown("**Top 5 lowest volatility**")
             fig_bot = px.bar(
-                bot5,
-                x="Ticker",
-                y="AnnVol",
-                text=bot5["Vol%"].astype(str) + "%",
-                color_discrete_sequence=["#047857"]  # cool accent
+                bot5, x="Ticker", y="AnnVol", text="VolPctStr",
             )
-            fig_bot.update_traces(textposition="outside")
+            fig_bot.update_traces(
+                marker_color=blues_bot,
+                textposition="outside",
+                textfont=dict(size=12),
+                hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
+                customdata=bot5["AnnVol"],
+            )
             fig_bot.update_layout(
                 yaxis_title="Annualized Volatility",
                 xaxis_title="",
-                height=320,
-                margin=dict(l=10, r=10, t=30, b=10)
+                height=340,
+                margin=dict(l=10, r=10, t=30, b=10),
+                showlegend=False,
             )
             st.plotly_chart(fig_bot, use_container_width=True)
+
+            links = " · ".join([f'<a href=\"?sym={s}\">{s}</a>' for s in bot5["Ticker"]])
+            st.markdown(f'<div style="margin-top:-6px;color:#005F7D">{links}</div>', unsafe_allow_html=True)
 
 st.subheader("Data")
 st.dataframe(
@@ -528,6 +566,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
