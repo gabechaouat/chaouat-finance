@@ -320,11 +320,6 @@ with st.sidebar:
 start = dt.date.today() - dt.timedelta(days=365 * years)
 end = dt.date.today()
 
-company_name, company_logo = get_company_meta(ticker)
-
-start = dt.date.today() - dt.timedelta(days=365 * years)
-end = dt.date.today()
-
 # STEP 3 — fetch data for all selected tickers
 if refresh:
     fetch_history_multi.clear()
@@ -488,6 +483,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
