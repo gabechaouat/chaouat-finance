@@ -366,6 +366,15 @@ with right:
     else:
         st.info("Insufficient data for the selected window.")
     st.markdown('</div>', unsafe_allow_html=True)
+    
+st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
+fig_vol = px.line(
+    x=prices["Date"], y=prices["vol_annualized"],
+    labels={"x": "Date", "y": "Ann. Volatility"},
+    color_discrete_sequence=["#005F7D"]
+)
+fig_vol.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
+st.plotly_chart(fig_vol, use_container_width=True)
 
 # === TOP / BOTTOM VOLATILITY ===
 if run_scan:
@@ -425,16 +434,6 @@ if run_scan:
             )
             st.plotly_chart(fig_bot, use_container_width=True)
 
-    
-st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
-fig_vol = px.line(
-    x=prices["Date"], y=prices["vol_annualized"],
-    labels={"x": "Date", "y": "Ann. Volatility"},
-    color_discrete_sequence=["#005F7D"]
-)
-fig_vol.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10))
-st.plotly_chart(fig_vol, use_container_width=True)
-
 st.subheader("Data")
 dl_cols = ["Date", "Close", "ret", "vol_daily", "vol_annualized"]
 st.dataframe(prices[dl_cols].tail(400), use_container_width=True)
@@ -445,6 +444,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
