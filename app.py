@@ -276,16 +276,16 @@ with col1:
 
     # Company logo (if available)
     if company_logo:
-    fig_price.add_layout_image(dict(
-        source=company_logo,
-        xref="paper", yref="paper",
-        x=0.0, y=1.16,          # a bit lower so it’s not clipped
-        sizex=0.09, sizey=0.09, # slightly smaller to fit margin
-        xanchor="left", yanchor="top",
-        layer="above"
-    ))
-    # Make sure there is enough top margin
-    fig_price.update_layout(margin=dict(l=10, r=10, t=100, b=10))
+        fig_price.add_layout_image(dict(
+            source=company_logo,
+            xref="paper", yref="paper",
+            x=0.0, y=1.16,          # a bit lower so it’s not clipped
+            sizex=0.09, sizey=0.09, # slightly smaller to fit margin
+            xanchor="left", yanchor="top",
+            layer="above"
+        ))
+        # Make sure there is enough top margin
+        fig_price.update_layout(margin=dict(l=10, r=10, t=100, b=10))
 
 
     st.plotly_chart(fig_price, use_container_width=True)
@@ -323,6 +323,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
