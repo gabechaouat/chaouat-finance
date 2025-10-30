@@ -6,6 +6,16 @@ import plotly.express as px
 import plotly.io as pio
 import streamlit as st
 import yfinance as yf
+@st.cache_data(ttl=24*60*60)
+def load_tickers():
+    # S&P 500 symbols (fast and lightweight). You can swap this URL later.
+    url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+    df = pd.read_csv(url)
+    syms = sorted(df["Symbol"].dropna().unique().tolist())
+    # Guarantee AAPL exists as a default
+    if "AAPL" not in syms:
+        syms.insert(0, "AAPL")
+    return syms
 
 # --- Page and style setup ---
 st.set_page_config(page_title="Chaouat Finance", page_icon="💹", layout="wide")
@@ -26,7 +36,12 @@ st.markdown("""
   --muted:#64748B;
 }
 
-html, body, [class*="css"]  {
+html, body, * {
+  font-family: 'Montserrat', sans-serif !important;
+}
+[data-testid="stAppViewContainer"],
+[data-testid="stSidebar"],
+[data-testid="stMarkdownContainer"] * {
   font-family: 'Montserrat', sans-serif !important;
 }
 
@@ -95,7 +110,16 @@ st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
 
 with st.sidebar:
     st.header("Settings")
-    ticker = st.text_input("Ticker (Yahoo symbol)", value="AAPL").strip().upper()
+    tickers = load_tickers()
+ticker = st.selectbox(
+    "Ticker (type to search)",
+    options=tickers,
+    index=tickers.index("AAPL") if "AAPL" in tickers else 0,
+    help="Start typing letters to filter (e.g., AA → AAPL)."
+)
+custom = st.text_input("Or enter any symbol (optional)").strip().upper()
+if custom:
+    ticker = custom
     years = st.slider("History (years)", 1, 10, 5)
     vol_window = st.slider("Rolling volatility window (trading days)", 5, 252, 20)
     use_log_returns = st.toggle("Use log returns (recommended)", True)
@@ -198,15 +222,7 @@ with col2:
         st.info("Insufficient data for the selected window.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    if latest is not None:
-        st.metric("Annualized Volatility", f"{latest_vol:.2%}",
-                  help="Std dev of daily returns over the selected window, annualized by √252.")
-        st.write(f"Window: **{vol_window}** trading days")
-        st.write(f"Returns: **{'log' if use_log_returns else 'simple'}**")
-        st.write(f"Data through: **{latest['Date'].date()}**")
-    else:
-        st.info("Insufficient data for the selected window.")
-
+    
 st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
 fig_vol = px.line(
     x=prices["Date"], y=prices["vol_annualized"],
@@ -226,6 +242,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
