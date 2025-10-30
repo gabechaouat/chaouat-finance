@@ -7,6 +7,42 @@ import plotly.io as pio
 import streamlit as st
 import yfinance as yf
 @st.cache_data(ttl=24*60*60)
+
+@st.cache_data(ttl=24*60*60)
+def load_sp500_df():
+    url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
+    return pd.read_csv(url)  # columns: Symbol, Name, Sector...
+
+@st.cache_data(ttl=6*60*60)
+def get_company_meta(sym: str):
+    """Return (company_name, logo_url) with robust fallbacks."""
+    name = None
+    logo = None
+
+    # 1) Try S&P 500 list for the name
+    try:
+        df = load_sp500_df()
+        hit = df.loc[df["Symbol"].str.upper() == sym.upper()]
+        if not hit.empty:
+            name = hit.iloc[0]["Name"]
+    except Exception:
+        pass
+
+    # 2) Try yfinance for name + logo
+    try:
+        info = yf.Ticker(sym).get_info()
+        name = info.get("longName") or info.get("shortName") or name
+        logo = info.get("logo_url") or logo
+    except Exception:
+        pass
+
+    # 3) Final fallbacks
+    if not name:
+        name = sym.upper()
+    # If no logo, leave None (we'll just skip adding it)
+    return name, logo
+
+
 def load_tickers():
     # S&P 500 symbols (fast and lightweight). You can swap this URL later.
     url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
@@ -127,7 +163,7 @@ with st.sidebar:
     use_log_returns = st.toggle("Use log returns (recommended)", True)
     ttl_minutes = st.number_input("Auto refresh cache TTL (minutes)", min_value=1, value=60)
     refresh = st.button("Force refresh now")
-
+company_name, company_logo = get_company_meta(ticker)
 
 start = dt.date.today() - dt.timedelta(days=365 * years)
 end = dt.date.today()
@@ -211,6 +247,29 @@ with col1:
     color_discrete_sequence=["#007BA7"]
 )
     fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
+    # Add “TICKER — Company name” annotation on the chart
+fig_price.add_annotation(
+    xref="paper", yref="paper", x=0.0, y=1.14, showarrow=False,
+    text=f"<b>{ticker}</b> — {company_name}",
+    font=dict(size=18, color="#0F172A")
+)
+
+# Add company logo (if we have a URL)
+if company_logo:
+    fig_price.add_layout_image(
+        dict(
+            source=company_logo,
+            xref="paper", yref="paper",
+            x=0.0, y=1.22,  # slightly above the annotation
+            sizex=0.12, sizey=0.12,  # tune if too big/small
+            xanchor="left", yanchor="top",
+            layer="above"
+        )
+    )
+
+# Give the plot a bit more top margin for the header + logo
+fig_price.update_layout(margin=dict(l=10, r=10, t=90, b=10))
+
     st.plotly_chart(fig_price, use_container_width=True)
 with col2:
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
@@ -245,6 +304,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
