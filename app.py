@@ -192,6 +192,22 @@ html, body, * {
 .cf-logo{
   width:32px; height:32px; object-fit:contain;
 }
+/* Volatility info box */
+.cf-info{
+  background: #E0F2FE; /* light cerulean tint */
+  border-left: 5px solid #007BA7;
+  padding: 14px 18px;
+  border-radius: 10px;
+  color: #0F172A;
+  font-size: 15px;
+  line-height: 1.5;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  margin: 10px 0 25px 0;
+}
+.cf-info strong{
+  color: #005F7D;
+}
+
 .cf-stocktext{
   font-size:22px; font-weight:700; color:#0F172A;
 }
@@ -214,7 +230,15 @@ st.markdown("""
   <div class="cf-sub">Clean, fast analytics for price trends and risk.</div>
 </div>
 """, unsafe_allow_html=True)
-
+st.markdown("""
+<div class="cf-info">
+  <strong>Volatility</strong> measures how much a stock’s price moves over time. 
+  A highly volatile stock fluctuates widely, offering both opportunity and risk, 
+  while a low-volatility stock tends to move more steadily. 
+  Understanding volatility helps investors gauge uncertainty, 
+  assess portfolio risk, and balance stability with potential returns.
+</div>
+""", unsafe_allow_html=True)
 
 st.title("Stock Volatility Dashboard")
 st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
@@ -444,6 +468,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
