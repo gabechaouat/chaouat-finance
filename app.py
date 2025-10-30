@@ -294,7 +294,7 @@ fig_price.update_layout(margin=dict(l=10, r=10, t=130, b=10))
 
 
 
-    st.plotly_chart(fig_price, use_container_width=True)
+st.plotly_chart(fig_price, use_container_width=True)
 
 with col2:
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
@@ -329,6 +329,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
