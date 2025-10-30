@@ -110,21 +110,25 @@ st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
 
 with st.sidebar:
     st.header("Settings")
+
     tickers = load_tickers()
-ticker = st.selectbox(
-    "Ticker (type to search)",
-    options=tickers,
-    index=tickers.index("AAPL") if "AAPL" in tickers else 0,
-    help="Start typing letters to filter (e.g., AA → AAPL)."
-)
-custom = st.text_input("Or enter any symbol (optional)").strip().upper()
-if custom:
-    ticker = custom
+    ticker = st.selectbox(
+        "Ticker (type to search)",
+        options=tickers,
+        index=tickers.index("AAPL") if "AAPL" in tickers else 0,
+        help="Start typing letters to filter (e.g., AA → AAPL)."
+    )
+
+    custom = st.text_input("Or enter any symbol (optional)").strip().upper()
+    if custom:
+        ticker = custom
+
     years = st.slider("History (years)", 1, 10, 5)
     vol_window = st.slider("Rolling volatility window (trading days)", 5, 252, 20)
     use_log_returns = st.toggle("Use log returns (recommended)", True)
     ttl_minutes = st.number_input("Auto refresh cache TTL (minutes)", min_value=1, value=60)
     refresh = st.button("Force refresh now")
+
 
 start = dt.date.today() - dt.timedelta(days=365 * years)
 end = dt.date.today()
@@ -242,6 +246,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
