@@ -248,3 +248,4 @@ st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>'
 
 
 
+
