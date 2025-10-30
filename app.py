@@ -253,13 +253,20 @@ html, body, * {
 .cf-stocktext{
   font-size:22px; font-weight:700; color:#0F172A;
 }
-/* Fix st.metric values getting truncated with ellipsis */
+/* Tame metric sizes in the single-ticker “Stock statistics” panel */
 [data-testid="stMetricValue"]{
-  font-size: 24px;
-  line-height: 1.1;
+  font-size: 20px !important;   /* was 28px */
+  line-height: 1.15;
   white-space: nowrap;
   overflow: visible !important;
   text-overflow: clip !important;
+}
+[data-testid="stMetricLabel"]{
+  font-size: 14px !important;
+  color: var(--muted);
+}
+[data-testid="stMetricDelta"]{
+  font-size: 13px !important;
 }
 
 /* Footer */
@@ -519,15 +526,23 @@ if run_scan:
                 yaxis_title="Annualized Volatility",
                 xaxis_title="",
                 height=340,
-                margin=dict(l=10, r=10, t=30, b=10),
+                margin=dict(l=60, r=10, t=30, b=10),   # ← set l=60
                 showlegend=False,
             )
             fig_top.update_xaxes(showticklabels=False)
             st.plotly_chart(fig_top, use_container_width=True)
 
+
+
             # Clickable ticker links under the chart
             links = " · ".join([f'<a href="?sym={s}">{s}</a>' for s in top5["Ticker"]])
-            st.markdown(f'<div style="margin-top:-6px;color:#005F7D">{links}</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="margin:6px 0 0 60px; text-align:left; font-weight:600; color:#005F7D;">'
+                + links +
+                '</div>',
+                unsafe_allow_html=True
+            )
+
 
         with rightc:
             st.markdown("**Top 5 lowest volatility**")
@@ -545,14 +560,20 @@ if run_scan:
                 yaxis_title="Annualized Volatility",
                 xaxis_title="",
                 height=340,
-                margin=dict(l=10, r=10, t=30, b=10),
+                margin=dict(l=60, r=10, t=30, b=10),   # ← set l=60
                 showlegend=False,
             )
             fig_bot.update_xaxes(showticklabels=False)
             st.plotly_chart(fig_bot, use_container_width=True)
 
-            links = " · ".join([f'<a href=\"?sym={s}\">{s}</a>' for s in bot5["Ticker"]])
-            st.markdown(f'<div style="margin-top:-6px;color:#005F7D">{links}</div>', unsafe_allow_html=True)
+            links = " · ".join([f'<a href="?sym={s}">{s}</a>' for s in bot5["Ticker"]])
+            st.markdown(
+                '<div style="margin:6px 0 0 60px; text-align:left; font-weight:600; color:#005F7D;">'
+                + links +
+                '</div>',
+                unsafe_allow_html=True
+            )
+
 
 st.subheader("Data")
 st.dataframe(
@@ -568,6 +589,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
