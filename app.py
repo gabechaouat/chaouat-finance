@@ -385,40 +385,76 @@ with left:
         st.plotly_chart(fig, use_container_width=True)
 
 with right:
-    # Build comparative stats table
+    # ---------- build the data used by either view ----------
     # Latest price per ticker
-    last_prices = prices_all.sort_values("Date").groupby("Ticker").tail(1)[["Ticker", "Close"]].set_index("Ticker")["Close"]
+    last_prices = (
+        prices_all.sort_values("Date")
+        .groupby("Ticker")
+        .tail(1)[["Ticker", "Close"]]
+        .set_index("Ticker")["Close"]
+    )
 
     # YTD return
     ytd_start = dt.date(dt.date.today().year, 1, 1)
     ytd_prices = prices_all[prices_all["Date"] >= pd.to_datetime(ytd_start)].copy()
-    ytd_first = ytd_prices.sort_values("Date").groupby("Ticker").head(1).set_index("Ticker")["Close"]
+    ytd_first = (
+        ytd_prices.sort_values("Date")
+        .groupby("Ticker")
+        .head(1)
+        .set_index("Ticker")["Close"]
+    )
     ytd_ret = ((last_prices / ytd_first) - 1).replace([np.inf, -np.inf], np.nan)
 
     # Latest annualized vol using the chosen window
     vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
-    last_vol = vol_df.sort_values("Date").groupby("Ticker").tail(1).set_index("Ticker")["AnnVol"]
-
-    # Assemble
-    comp = pd.DataFrame({
-        "Last Price ($)": last_prices.round(2),
-        f"Vol {vol_window}d (ann)": (last_vol * 100).round(2).astype(float),
-        "YTD Return (%)": (ytd_ret * 100).round(2).astype(float),
-    })
-    comp = comp.reindex(pick)  # preserve selection order
+    last_vol = (
+        vol_df.sort_values("Date")
+        .groupby("Ticker")
+        .tail(1)
+        .set_index("Ticker")["AnnVol"]
+    )
 
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-    st.subheader("Comparison")
-    st.dataframe(
-        comp,
-        use_container_width=True,
-        column_config={
-            "Last Price ($)": st.column_config.NumberColumn(format="%.2f"),
-            f"Vol {vol_window}d (ann)": st.column_config.NumberColumn(format="%.2f%%"),
-            "YTD Return (%)": st.column_config.NumberColumn(format="%.2f%%"),
-        }
-    )
+
+    if len(pick) >= 2:
+        # ---------- COMPARISON (2+ tickers) ----------
+        st.subheader("Comparison")
+
+        comp = pd.DataFrame({
+            "Last Price ($)": last_prices.round(2),
+            f"Vol {vol_window}d (ann)": (last_vol * 100).round(2).astype(float),
+            "YTD Return (%)": (ytd_ret * 100).round(2).astype(float),
+        })
+        comp = comp.reindex(pick)  # preserve user selection order
+
+        st.dataframe(
+            comp,
+            use_container_width=True,
+            column_config={
+                "Last Price ($)": st.column_config.NumberColumn(format="%.2f"),
+                f"Vol {vol_window}d (ann)": st.column_config.NumberColumn(format="%.2f%%"),
+                "YTD Return (%)": st.column_config.NumberColumn(format="%.2f%%"),
+            }
+        )
+    else:
+        # ---------- SINGLE TICKER STATS ----------
+        st.subheader("Stock statistics")
+
+        sym = pick[0]
+        lp = float(last_prices.get(sym, np.nan)) if sym in last_prices.index else float("nan")
+        lv = float(last_vol.get(sym, np.nan) * 100) if sym in last_vol.index else float("nan")
+        yr = float(ytd_ret.get(sym, np.nan) * 100) if sym in ytd_ret.index else float("nan")
+
+        c1, c2, c3 = st.columns(3)
+        if not np.isnan(lp):
+            c1.metric("Last Price ($)", f"{lp:.2f}")
+        if not np.isnan(lv):
+            c2.metric(f"Vol {vol_window}d (ann)", f"{lv:.2f}%")
+        if not np.isnan(yr):
+            c3.metric("YTD Return", f"{yr:.2f}%")
+
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 # === TOP / BOTTOM VOLATILITY ===
 if run_scan:
@@ -492,6 +528,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
