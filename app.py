@@ -238,39 +238,42 @@ prices["vol_annualized"] = prices["vol_daily"] * math.sqrt(252)
 latest = prices.dropna().iloc[-1] if not prices.dropna().empty else None
 latest_vol = float(latest["vol_annualized"]) if latest is not None else None
 
+# === PRICE CHART COLUMN ===
 col1, col2 = st.columns([2, 1])
+
 with col1:
     st.subheader(f"Price: {ticker}")
-    fig_price = px.line(
-    x=prices["Date"], y=prices["Close"],
-    labels={"x": "Date", "y": "Adj. Close ($)"},
-    color_discrete_sequence=["#007BA7"]
-)
-    fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
-    # Add “TICKER — Company name” annotation on the chart
-fig_price.add_annotation(
-    xref="paper", yref="paper", x=0.0, y=1.14, showarrow=False,
-    text=f"<b>{ticker}</b> — {company_name}",
-    font=dict(size=18, color="#0F172A")
-)
 
-# Add company logo (if we have a URL)
-if company_logo:
-    fig_price.add_layout_image(
-        dict(
-            source=company_logo,
-            xref="paper", yref="paper",
-            x=0.0, y=1.22,  # slightly above the annotation
-            sizex=0.12, sizey=0.12,  # tune if too big/small
-            xanchor="left", yanchor="top",
-            layer="above"
-        )
+    fig_price = px.line(
+        x=prices["Date"],
+        y=prices["Close"],
+        labels={"x": "Date", "y": "Adj. Close ($)"},
+        color_discrete_sequence=["#007BA7"]
     )
 
-# Give the plot a bit more top margin for the header + logo
-fig_price.update_layout(margin=dict(l=10, r=10, t=90, b=10))
+    # leave room at the top for annotation + logo
+    fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=90, b=10))
+
+    # “TICKER — Company name” annotation
+    fig_price.add_annotation(
+        xref="paper", yref="paper", x=0.0, y=1.14, showarrow=False,
+        text=f"<b>{ticker}</b> — {company_name}",
+        font=dict(size=18, color="#0F172A")
+    )
+
+    # Company logo (if available)
+    if company_logo:
+        fig_price.add_layout_image(dict(
+            source=company_logo,
+            xref="paper", yref="paper",
+            x=0.0, y=1.22,
+            sizex=0.12, sizey=0.12,
+            xanchor="left", yanchor="top",
+            layer="above"
+        ))
 
     st.plotly_chart(fig_price, use_container_width=True)
+
 with col2:
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
     st.subheader("Latest stats")
@@ -304,6 +307,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
