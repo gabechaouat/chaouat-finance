@@ -54,6 +54,58 @@ def get_company_meta(sym: str):
 
     return name, logo
 
+@st.cache_data(ttl=60*60)
+def scan_volatility(tickers: list[str], lookback_days: int, use_log: bool) -> pd.DataFrame:
+    """
+    Returns a DataFrame with columns: ['Ticker','AnnVol'] for the given tickers.
+    Volatility is std of daily returns over the last `lookback_days`, annualized by sqrt(252).
+    """
+    # Convert trading days to calendar days (roughly)
+    cal_days = int(lookback_days * 1.6) + 10  # buffer
+    start = dt.date.today() - dt.timedelta(days=cal_days)
+
+    # Batch download to keep it fast; auto_adjust gives split/div adjusted close
+    data = yf.download(
+        tickers,
+        start=start,
+        end=dt.date.today(),
+        interval="1d",
+        auto_adjust=True,
+        progress=False,
+        group_by="ticker",
+        threads=True
+    )
+
+    out = []
+    TRD = 252
+
+    # If a single ticker sneaks in, yfinance returns a single-level frame. Normalize access.
+    for sym in tickers:
+        try:
+            if isinstance(data.columns, pd.MultiIndex):
+                close = data[(sym, "Close")].dropna()
+            else:
+                # Single-level fallback; happens if tickers has length 1
+                close = data["Close"].dropna()
+
+            if close.size < lookback_days + 5:
+                continue
+
+            ret = np.log(close).diff() if use_log else close.pct_change()
+            ret = ret.dropna().tail(lookback_days)
+            if ret.empty:
+                continue
+
+            vol_daily = float(ret.std())
+            ann_vol = vol_daily * math.sqrt(TRD)
+            out.append((sym, ann_vol))
+        except Exception:
+            # Skip problematic symbols gracefully
+            continue
+
+    df = pd.DataFrame(out, columns=["Ticker", "AnnVol"]).dropna()
+    df = df.sort_values("AnnVol", ascending=False).reset_index(drop=True)
+    return df
 
 
 def load_tickers():
@@ -187,6 +239,11 @@ with st.sidebar:
     use_log_returns = st.toggle("Use log returns (recommended)", True)
     ttl_minutes = st.number_input("Auto refresh cache TTL (minutes)", min_value=1, value=60)
     refresh = st.button("Force refresh now")
+    st.divider()
+    st.subheader("Cross-section scan")
+    lookback_days = st.slider("Lookback (trading days) for scan", 20, 252, 60, help="Used to rank top/bottom volatility across the S&P 500.")
+    run_scan = st.checkbox("Show Top 5 / Bottom 5 volatility lists", value=True)
+
 company_name, company_logo = get_company_meta(ticker)
 
 start = dt.date.today() - dt.timedelta(days=365 * years)
@@ -331,6 +388,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
