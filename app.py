@@ -267,25 +267,31 @@ with col1:
     # leave room at the top for annotation + logo
     fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=90, b=10))
 
-    # “TICKER — Company name” annotation
-    fig_price.add_annotation(
-        xref="paper", yref="paper", x=0.0, y=1.14, showarrow=False,
-        text=f"<b>{ticker}</b> — {company_name}",
-        font=dict(size=18, color="#0F172A")
-    )
+    # --- “TICKER — Company name” + logo side by side ---
 
-    # Company logo (if available)
-    if company_logo:
-        fig_price.add_layout_image(dict(
-            source=company_logo,
-            xref="paper", yref="paper",
-            x=0.0, y=1.16,          # a bit lower so it’s not clipped
-            sizex=0.09, sizey=0.09, # slightly smaller to fit margin
-            xanchor="left", yanchor="top",
-            layer="above"
-        ))
-        # Make sure there is enough top margin
-        fig_price.update_layout(margin=dict(l=10, r=10, t=100, b=10))
+# First, text annotation (shifted right to leave space for the logo)
+fig_price.add_annotation(
+    xref="paper", yref="paper",
+    x=0.13, y=1.12,  # move slightly right and down
+    showarrow=False,
+    text=f"<b>{ticker}</b> — {company_name}",
+    font=dict(size=22, color="#0F172A")
+)
+
+# Then, the logo on the left
+if company_logo:
+    fig_price.add_layout_image(dict(
+        source=company_logo,
+        xref="paper", yref="paper",
+        x=0.0, y=1.20,           # higher up so it's above text
+        sizex=0.12, sizey=0.12,  # make it bigger
+        xanchor="left", yanchor="top",
+        layer="above"
+    ))
+
+# Increase top margin to make space
+fig_price.update_layout(margin=dict(l=10, r=10, t=130, b=10))
+
 
 
     st.plotly_chart(fig_price, use_container_width=True)
@@ -323,6 +329,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
