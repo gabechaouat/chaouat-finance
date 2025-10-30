@@ -325,75 +325,14 @@ company_name, company_logo = get_company_meta(ticker)
 start = dt.date.today() - dt.timedelta(days=365 * years)
 end = dt.date.today()
 
-@st.cache_data(show_spinner=True)  # simpler, avoids using ttl_minutes at import time
-def fetch_history(sym: str, start_d, end_d) -> pd.DataFrame:
-    df = yf.download(sym, start=start_d, end=end_d, interval="1d", auto_adjust=True)
-    df = df.rename_axis("Date").reset_index()
-    return df
-
+# STEP 3 — fetch data for all selected tickers
 if refresh:
-    fetch_history.clear()
+    fetch_history_multi.clear()
 
-try:
-    raw = fetch_history(ticker, start, end)
-    if raw.empty:
-        st.warning("No data returned. Check the ticker symbol.")
-        st.stop()
-except Exception as e:
-    st.error(f"Error fetching data: {e}")
+prices_all = fetch_history_multi(pick, start, end)
+if prices_all.empty:
+    st.error("No price data returned. Try different symbols.")
     st.stop()
-
-# --- Normalize raw data into a simple (Date, Close) DataFrame ---
-df = raw.copy()
-
-# If index is the date, move it to a column
-if "Date" not in df.columns:
-    df = df.reset_index().rename(columns={"index": "Date"})
-
-close_series = None
-
-if isinstance(raw.columns, pd.MultiIndex):
-    # Try ('Close', <ticker>) first
-    try:
-        close_series = raw[("Close", ticker)]
-    except Exception:
-        # Fallback: first column under top-level 'Close'
-        if "Close" in raw.columns.get_level_values(0):
-            close_series = raw["Close"].iloc[:, 0]
-        elif "Adj Close" in raw.columns.get_level_values(0):
-            close_series = raw["Adj Close"].iloc[:, 0]
-else:
-    # Single-level columns
-    if "Close" in raw.columns:
-        close_series = raw["Close"]
-    elif "Adj Close" in raw.columns:
-        close_series = raw["Adj Close"]
-    else:
-        # Last resort: first numeric column
-        close_series = raw.select_dtypes(include="number").iloc[:, 0]
-
-prices = pd.DataFrame({"Date": df["Date"], "Close": close_series})
-
-# Clean types
-prices["Date"] = pd.to_datetime(prices["Date"], errors="coerce")
-prices["Close"] = pd.to_numeric(prices["Close"], errors="coerce")
-prices = prices.dropna(subset=["Date", "Close"]).reset_index(drop=True)
-
-# Guard: stop if still empty
-if prices.empty:
-    st.warning("No price data found. Try a single ticker like AAPL.")
-    st.stop()
-
-# Guard: stop if columns missing or frame empty
-if prices.empty or not {"Date", "Close"}.issubset(prices.columns):
-    st.error(f"Unexpected data shape. Columns: {list(raw.columns)}")
-    st.stop()
-prices["ret"] = np.log(prices["Close"]).diff() if use_log_returns else prices["Close"].pct_change()
-prices["vol_daily"] = prices["ret"].rolling(vol_window).std()
-prices["vol_annualized"] = prices["vol_daily"] * math.sqrt(252)
-
-latest = prices.dropna().iloc[-1] if not prices.dropna().empty else None
-latest_vol = float(latest["vol_annualized"]) if latest is not None else None
 
 # === CHART + COMPARISON STATS IN ONE ROW ===
 left, right = st.columns([2.5, 1], gap="large")
@@ -554,6 +493,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
