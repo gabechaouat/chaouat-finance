@@ -23,7 +23,7 @@ with st.sidebar:
 start = date.today() - timedelta(days=365 * years)
 end = date.today()
 
-@st.cache_data(ttl=lambda: int(ttl_minutes) * 60)
+@st.cache_data(ttl=int(ttl_minutes) * 60, show_spinner=True)
 def fetch_history(sym: str, start_d: date, end_d: date) -> pd.DataFrame:
     df = yf.download(sym, start=start_d, end=end_d, interval="1d", auto_adjust=True)
     df = df.rename_axis("Date").reset_index()
@@ -81,3 +81,4 @@ st.download_button("Download CSV",
                    mime="text/csv")
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
+
