@@ -262,56 +262,42 @@ prices["vol_annualized"] = prices["vol_daily"] * math.sqrt(252)
 latest = prices.dropna().iloc[-1] if not prices.dropna().empty else None
 latest_vol = float(latest["vol_annualized"]) if latest is not None else None
 
-# === PRICE CHART COLUMN ===
-col1, col2 = st.columns([2, 1])
+# === CHART + STATS IN ONE ROW ===
+left, right = st.columns([2.5, 1], gap="large")
 
-with col1:
-    st.subheader(f"Price: {ticker}")
+with left:
+    # Header line: logo + "TICKER — Company Name"
+    if company_logo:
+        st.markdown(
+            f"""
+            <div class="cf-stockline">
+              <img src="{company_logo}" alt="{ticker} logo" class="cf-logo"/>
+              <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"""
+            <div class="cf-stockline">
+              <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
+    # Chart
     fig_price = px.line(
-        x=prices["Date"],
-        y=prices["Close"],
+        x=prices["Date"], y=prices["Close"],
         labels={"x": "Date", "y": "Adj. Close ($)"},
         color_discrete_sequence=["#007BA7"]
     )
+    fig_price.update_layout(height=440, margin=dict(l=10, r=10, t=30, b=10))
+    st.plotly_chart(fig_price, use_container_width=True)
 
-    # leave room at the top for annotation + logo
-    fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=90, b=10))
-
-    # --- “TICKER — Company name” + logo side by side ---
-
-
-
-# Increase top margin to make space
-fig_price.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
-
-
-
-st.plotly_chart(fig_price, use_container_width=True)
-
-# Header line: logo + "TICKER — Company Name"
-if company_logo:
-    st.markdown(
-        f"""
-        <div class="cf-stockline">
-          <img src="{company_logo}" alt="{ticker} logo" class="cf-logo"/>
-          <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    st.markdown(
-        f"""
-        <div class="cf-stockline">
-          <div class="cf-stocktext"><b>{ticker}</b> — {company_name}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-with col2:
+with right:
+    # Stats card next to the chart
     st.markdown('<div class="metric-card">', unsafe_allow_html=True)
     st.subheader("Latest stats")
     if latest is not None:
@@ -323,6 +309,7 @@ with col2:
     else:
         st.info("Insufficient data for the selected window.")
     st.markdown('</div>', unsafe_allow_html=True)
+
 
     
 st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
@@ -344,6 +331,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
