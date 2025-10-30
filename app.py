@@ -41,10 +41,46 @@ except Exception as e:
     st.error(f"Error fetching data: {e}")
     st.stop()
 
-prices = raw[["Date", "Close"]].copy()
+# --- Normalize raw data into a simple (Date, Close) DataFrame ---
+df = raw.copy()
+
+# If index is the date, move it to a column
+if "Date" not in df.columns:
+    df = df.reset_index().rename(columns={"index": "Date"})
+
+close_series = None
+
+if isinstance(raw.columns, pd.MultiIndex):
+    # Try ('Close', <ticker>) first
+    try:
+        close_series = raw[("Close", ticker)]
+    except Exception:
+        # Fallback: first column under top-level 'Close'
+        if "Close" in raw.columns.get_level_values(0):
+            close_series = raw["Close"].iloc[:, 0]
+        elif "Adj Close" in raw.columns.get_level_values(0):
+            close_series = raw["Adj Close"].iloc[:, 0]
+else:
+    # Single-level columns
+    if "Close" in raw.columns:
+        close_series = raw["Close"]
+    elif "Adj Close" in raw.columns:
+        close_series = raw["Adj Close"]
+    else:
+        # Last resort: first numeric column
+        close_series = raw.select_dtypes(include="number").iloc[:, 0]
+
+prices = pd.DataFrame({"Date": df["Date"], "Close": close_series})
+
+# Clean types
 prices["Date"] = pd.to_datetime(prices["Date"], errors="coerce")
 prices["Close"] = pd.to_numeric(prices["Close"], errors="coerce")
 prices = prices.dropna(subset=["Date", "Close"]).reset_index(drop=True)
+
+# Guard: stop if still empty
+if prices.empty:
+    st.warning("No price data found. Try a single ticker like AAPL.")
+    st.stop()
 
 # Guard: stop if columns missing or frame empty
 if prices.empty or not {"Date", "Close"}.issubset(prices.columns):
@@ -90,5 +126,6 @@ st.download_button("Download CSV",
                    mime="text/csv")
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
+
 
 
