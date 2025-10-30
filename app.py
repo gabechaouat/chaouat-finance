@@ -15,11 +15,10 @@ def load_sp500_df():
 
 @st.cache_data(ttl=6*60*60)
 def get_company_meta(sym: str):
-    """Return (company_name, logo_url) with robust fallbacks."""
-    name = None
-    logo = None
+    """Return (company_name, logo_url) using S&P list/yfinance + Clearbit fallback."""
+    name, logo = None, None
 
-    # 1) Try S&P 500 list for the name
+    # Try S&P 500 list for name
     try:
         df = load_sp500_df()
         hit = df.loc[df["Symbol"].str.upper() == sym.upper()]
@@ -28,19 +27,33 @@ def get_company_meta(sym: str):
     except Exception:
         pass
 
-    # 2) Try yfinance for name + logo
+    # Try yfinance for better name + website
+    website = None
     try:
         info = yf.Ticker(sym).get_info()
         name = info.get("longName") or info.get("shortName") or name
+        website = info.get("website") or info.get("website_url")
+        # yfinance sometimes DOES provide logo_url; use it if present
         logo = info.get("logo_url") or logo
     except Exception:
         pass
 
-    # 3) Final fallbacks
+    # Build a robust logo URL from the website domain using Clearbit
+    if not logo and website:
+        try:
+            from urllib.parse import urlparse
+            u = urlparse(website if website.startswith("http") else f"https://{website}")
+            host = (u.netloc or u.path).split("/")[0].replace("www.", "")
+            if host:
+                logo = f"https://logo.clearbit.com/{host}"
+        except Exception:
+            pass
+
     if not name:
         name = sym.upper()
-    # If no logo, leave None (we'll just skip adding it)
+
     return name, logo
+
 
 
 def load_tickers():
@@ -263,14 +276,17 @@ with col1:
 
     # Company logo (if available)
     if company_logo:
-        fig_price.add_layout_image(dict(
-            source=company_logo,
-            xref="paper", yref="paper",
-            x=0.0, y=1.22,
-            sizex=0.12, sizey=0.12,
-            xanchor="left", yanchor="top",
-            layer="above"
-        ))
+    fig_price.add_layout_image(dict(
+        source=company_logo,
+        xref="paper", yref="paper",
+        x=0.0, y=1.16,          # a bit lower so it’s not clipped
+        sizex=0.09, sizey=0.09, # slightly smaller to fit margin
+        xanchor="left", yanchor="top",
+        layer="above"
+    ))
+    # Make sure there is enough top margin
+    fig_price.update_layout(margin=dict(l=10, r=10, t=100, b=10))
+
 
     st.plotly_chart(fig_price, use_container_width=True)
 
@@ -307,6 +323,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
