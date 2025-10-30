@@ -367,6 +367,63 @@ with right:
         st.info("Insufficient data for the selected window.")
     st.markdown('</div>', unsafe_allow_html=True)
 
+# === TOP / BOTTOM VOLATILITY ===
+if run_scan:
+    st.subheader("Volatility leaders and laggards")
+
+    # Use the S&P 500 universe you already load
+    universe = load_sp500_df()["Symbol"].dropna().unique().tolist()
+
+    with st.spinner("Scanning volatility across the S&P 500..."):
+        scan_df = scan_volatility(universe, lookback_days=lookback_days, use_log=use_log_returns)
+
+    if scan_df.empty or len(scan_df) < 5:
+        st.info("Not enough data to compute the cross-section right now.")
+    else:
+        top5 = scan_df.head(5).copy()
+        bot5 = scan_df.sort_values("AnnVol", ascending=True).head(5).copy()
+
+        # Format percent for labels
+        top5["Vol%"] = (top5["AnnVol"] * 100).round(2)
+        bot5["Vol%"] = (bot5["AnnVol"] * 100).round(2)
+
+        leftc, rightc = st.columns(2, gap="large")
+
+        with leftc:
+            st.markdown("**Top 5 highest volatility**")
+            fig_top = px.bar(
+                top5,
+                x="Ticker",
+                y="AnnVol",
+                text=top5["Vol%"].astype(str) + "%",
+                color_discrete_sequence=["#C2410C"]  # warm accent
+            )
+            fig_top.update_traces(textposition="outside")
+            fig_top.update_layout(
+                yaxis_title="Annualized Volatility",
+                xaxis_title="",
+                height=320,
+                margin=dict(l=10, r=10, t=30, b=10)
+            )
+            st.plotly_chart(fig_top, use_container_width=True)
+
+        with rightc:
+            st.markdown("**Top 5 lowest volatility**")
+            fig_bot = px.bar(
+                bot5,
+                x="Ticker",
+                y="AnnVol",
+                text=bot5["Vol%"].astype(str) + "%",
+                color_discrete_sequence=["#047857"]  # cool accent
+            )
+            fig_bot.update_traces(textposition="outside")
+            fig_bot.update_layout(
+                yaxis_title="Annualized Volatility",
+                xaxis_title="",
+                height=320,
+                margin=dict(l=10, r=10, t=30, b=10)
+            )
+            st.plotly_chart(fig_bot, use_container_width=True)
 
     
 st.subheader(f"Rolling Annualized Volatility ({vol_window}d)")
@@ -388,6 +445,7 @@ st.download_button("Download CSV",
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
