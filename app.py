@@ -580,7 +580,7 @@ if run_scan:
         st.plotly_chart(fig_bot, use_container_width=True)
 
 
-            links = " · ".join([f'<a href="?sym={s}">{s}</a>' for s in bot5["Ticker"]])
+        links = " · ".join([f'<a href="?sym={s}">{s}</a>' for s in bot5["Ticker"]])
             st.markdown(
                 '<div style="margin:6px 0 0 60px; text-align:left; font-weight:600; color:#005F7D;">'
                 + links +
@@ -603,6 +603,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
