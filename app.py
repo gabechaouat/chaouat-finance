@@ -512,11 +512,10 @@ if run_scan:
 
         with leftc:
             st.markdown("**Top 5 highest volatility**")
-            fig_top = px.bar(
-                top5, x="Ticker", y="AnnVol", text="VolPctStr",
-            )
+
+            fig_top = px.bar(top5, x="Ticker", y="AnnVol", text="VolPctStr")
             fig_top.update_traces(
-                marker_color=blues_top,
+                marker_color=px.colors.sequential.Blues[-5:],
                 textposition="outside",
                 textfont=dict(size=12),
                 hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
@@ -525,31 +524,30 @@ if run_scan:
             fig_top.update_layout(
                 yaxis_title="Annualized Volatility",
                 xaxis_title="",
-                height=340,
-                margin=dict(l=60, r=10, t=30, b=10),   # ← set l=60
+                height=360,
+                margin=dict(l=60, r=10, t=30, b=60),   # unified margins
                 showlegend=False,
             )
             fig_top.update_xaxes(showticklabels=False)
+
+            # clickable ticker labels, perfectly aligned under bars (inside the figure)
+            for x in top5["Ticker"]:
+                fig_top.add_annotation(
+                    x=x, xref="x",
+                    y=-0.18, yref="paper",
+                    text=f"<a href='?sym={x}'>{x}</a>",
+                    showarrow=False, align="center",
+                    font=dict(color="#005F7D", size=12)
+                )
+
             st.plotly_chart(fig_top, use_container_width=True)
 
 
 
-            # Clickable ticker links under the chart
-            links = " · ".join([f'<a href="?sym={s}">{s}</a>' for s in top5["Ticker"]])
-            st.markdown(
-                '<div style="margin:6px 0 0 60px; text-align:left; font-weight:600; color:#005F7D;">'
-                + links +
-                '</div>',
-                unsafe_allow_html=True
-            )
-
-
         with rightc:
             st.markdown("**Top 5 lowest volatility**")
-            fig_bot = px.bar(
-                bot5, x="Ticker", y="AnnVol", text="VolPctStr"
-            )
 
+            fig_bot = px.bar(bot5, x="Ticker", y="AnnVol", text="VolPctStr")
             fig_bot.update_traces(
                 marker_color=px.colors.sequential.Blues[2:7],
                 textposition="outside",
@@ -557,36 +555,26 @@ if run_scan:
                 hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
                 customdata=bot5["AnnVol"],
             )
-
             fig_bot.update_layout(
                 yaxis_title="Annualized Volatility",
                 xaxis_title="",
                 height=360,
-                margin=dict(l=60, r=10, t=30, b=60),
+                margin=dict(l=60, r=10, t=30, b=60),   # same as left
                 showlegend=False,
             )
-
             fig_bot.update_xaxes(showticklabels=False)
 
             for x in bot5["Ticker"]:
                 fig_bot.add_annotation(
-                x=x, xref="x",
-                y=-0.18, yref="paper",
-                text=f"<a href='?sym={x}'>{x}</a>",
-                showarrow=False, align="center",
-                font=dict(color="#005F7D", size=12)
-            )
+                    x=x, xref="x",
+                    y=-0.18, yref="paper",
+                    text=f"<a href='?sym={x}'>{x}</a>",
+                    showarrow=False, align="center",
+                    font=dict(color="#005F7D", size=12)
+                )
 
-        st.plotly_chart(fig_bot, use_container_width=True)
+            st.plotly_chart(fig_bot, use_container_width=True)  # <-- keep INSIDE with rightc:
 
-
-        links = " · ".join([f'<a href="?sym={s}">{s}</a>' for s in bot5["Ticker"]])
-        st.markdown(
-            '<div style="margin:6px 0 0 60px; text-align:left; font-weight:600; color:#005F7D;">'
-            + links +
-            '</div>',
-            unsafe_allow_html=True
-        )
 
 
 st.subheader("Data")
@@ -603,6 +591,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
