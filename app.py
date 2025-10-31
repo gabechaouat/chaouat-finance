@@ -397,26 +397,6 @@ with left:
             unsafe_allow_html=True
         )
 
-    else:
-        # Multiple tickers: no logo, no full company name
-        st.markdown(
-            f"""
-            <div class="cf-stockline">
-              <div class="cf-stocktext"><b>{' / '.join(pick)}</b></div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    else:
-        st.markdown(
-            f"""
-            <div class="cf-stockline">
-              <div class="cf-stocktext"><b>{' / '.join(pick)}</b></div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
 
     if chart_mode == "Price":
         fig = px.line(
@@ -618,6 +598,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
