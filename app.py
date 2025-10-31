@@ -368,29 +368,35 @@ if prices_all.empty:
 left, right = st.columns([2.5, 1], gap="large")
 
 with left:
-    # Header: show logo + full name ONLY when 1 ticker; otherwise just the tickers
+    # Header: show logo + full name ONLY when there is a single ticker.
+    # For multiple tickers, show only the tickers string (no logo, no long name).
     if len(pick) == 1:
         sym = pick[0]
         company_name, company_logo = get_company_meta(sym)
-        if company_logo:
-            st.markdown(
-                f"""
-                <div class="cf-stockline">
-                  <img src="{company_logo}" alt="{sym} logo" class="cf-logo"/>
-                  <div class="cf-stocktext"><b>{sym}</b> — {company_name}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f"""
-                <div class="cf-stockline">
-                  <div class="cf-stocktext"><b>{sym}</b>{' — ' + company_name if company_name else ''}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+
+        # Build one HTML block to avoid nested triple-quote pitfalls
+        logo_html = f'<img src="{company_logo}" alt="{sym} logo" class="cf-logo"/>' if company_logo else ""
+        name_html = f' — {company_name}' if company_name else ""
+
+        st.markdown(
+            f"""
+            <div class="cf-stockline">
+              {logo_html}
+              <div class="cf-stocktext"><b>{sym}</b>{name_html}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"""
+            <div class="cf-stockline">
+              <div class="cf-stocktext"><b>{' / '.join(pick)}</b></div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     else:
         # Multiple tickers: no logo, no full company name
         st.markdown(
@@ -612,6 +618,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
