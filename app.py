@@ -368,19 +368,40 @@ if prices_all.empty:
 left, right = st.columns([2.5, 1], gap="large")
 
 with left:
-    # For the header, show first selected company name + logo (optional)
-    first_ticker = pick[0]
-    company_name, company_logo = get_company_meta(first_ticker)
-    if company_logo:
+    # Header: show logo + full name ONLY when 1 ticker; otherwise just the tickers
+    if len(pick) == 1:
+        sym = pick[0]
+        company_name, company_logo = get_company_meta(sym)
+        if company_logo:
+            st.markdown(
+                f"""
+                <div class="cf-stockline">
+                  <img src="{company_logo}" alt="{sym} logo" class="cf-logo"/>
+                  <div class="cf-stocktext"><b>{sym}</b> — {company_name}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"""
+                <div class="cf-stockline">
+                  <div class="cf-stocktext"><b>{sym}</b>{' — ' + company_name if company_name else ''}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+    else:
+        # Multiple tickers: no logo, no full company name
         st.markdown(
             f"""
             <div class="cf-stockline">
-              <img src="{company_logo}" alt="{first_ticker} logo" class="cf-logo"/>
-              <div class="cf-stocktext"><b>{' / '.join(pick)}</b> — {company_name}</div>
+              <div class="cf-stocktext"><b>{' / '.join(pick)}</b></div>
             </div>
             """,
             unsafe_allow_html=True
         )
+
     else:
         st.markdown(
             f"""
@@ -591,6 +612,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
