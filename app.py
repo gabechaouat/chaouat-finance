@@ -139,16 +139,28 @@ def fetch_history_multi(syms: list[str], start_d, end_d):
 
 
 def compute_rolling_vol(df_prices: pd.DataFrame, window: int, use_log: bool) -> pd.DataFrame:
-    """Input tidy prices (Date, Ticker, Close). Return tidy rolling vol with AnnVol column."""
+    """
+    Return tidy rolling annualized volatility with columns: Date, Ticker, AnnVol.
+    Uses transform() to keep index alignment stable.
+    """
     if df_prices.empty:
         return pd.DataFrame(columns=["Date", "Ticker", "AnnVol"])
+
     df = df_prices.sort_values(["Ticker", "Date"]).copy()
-    df["ret"] = df.groupby("Ticker")["Close"].apply(
-        lambda s: np.log(s).diff() if use_log else s.pct_change()
-    ).reset_index(level=0, drop=True)
-    df["vol_daily"] = df.groupby("Ticker")["ret"].rolling(window).std().reset_index(level=0, drop=True)
+
+    # returns
+    if use_log:
+        df["ret"] = df.groupby("Ticker")["Close"].transform(lambda s: np.log(s).diff())
+    else:
+        df["ret"] = df.groupby("Ticker")["Close"].pct_change()
+
+    # rolling daily vol, keep alignment with transform
+    df["vol_daily"] = df.groupby("Ticker")["ret"].transform(lambda s: s.rolling(window).std())
     df["AnnVol"] = df["vol_daily"] * math.sqrt(252)
-    return df.dropna(subset=["AnnVol"])
+
+    # keep only what we need, drop rows where we don't have vol yet
+    out = df.dropna(subset=["AnnVol"])[["Date", "Ticker", "AnnVol"]]
+    return out
 
 def load_tickers():
     # S&P 500 symbols (fast and lightweight). You can swap this URL later.
@@ -408,7 +420,11 @@ with left:
         st.plotly_chart(fig, use_container_width=True)
 
     else:  # Rolling Volatility
-        vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+    vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+
+    if vol_df.empty:
+        st.info("Not enough data to compute rolling volatility for the current window.")
+    else:
         fig = px.line(
             vol_df,
             x="Date", y="AnnVol", color="Ticker",
@@ -416,7 +432,6 @@ with left:
         )
         fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig, use_container_width=True)
-
 with right:
     # ---------- build the data used by either view ----------
     # Latest price per ticker
@@ -598,6 +613,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
