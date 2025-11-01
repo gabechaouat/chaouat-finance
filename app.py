@@ -7,6 +7,12 @@ import plotly.io as pio
 import streamlit as st
 import yfinance as yf
 
+def get_query_params():
+    try:
+        return st.query_params
+    except Exception:
+        return st.experimental_get_query_params()
+
 @st.cache_data(ttl=24*60*60)
 def load_sp500_df():
     url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
@@ -354,15 +360,17 @@ st.title("Stock Volatility Dashboard")
 st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
 
 # Optional: deep-link into a ticker with ?sym=XXXX
-qp = st.query_params
+qp = get_query_params()
+
 if "sym" in qp:
     _sym_qs = qp["sym"]
     if isinstance(_sym_qs, str):
         default_pick = [_sym_qs.upper()]
-    else:
+    else:  # list-like
         default_pick = [s.upper() for s in _sym_qs][:4]
 else:
     default_pick = ["AAPL"]
+
 
 with st.sidebar:
     st.header("Settings")
@@ -744,6 +752,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
