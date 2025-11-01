@@ -453,8 +453,7 @@ with left:
 
     if chart_mode == "Price":
         fig = px.line(
-            prices_all,
-            x="Date", y="Close", color="Ticker",
+            prices_all, x="Date", y="Close", color="Ticker",
             labels={"Close": "Adj. Close ($)", "Date": "Date"},
         )
         fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
@@ -463,16 +462,15 @@ with left:
     else:  # Rolling Volatility
         vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
 
-    if vol_df.empty:
-        st.info("Not enough data to compute rolling volatility for the current window.")
-    else:
-        fig = px.line(
-            vol_df,
-            x="Date", y="AnnVol", color="Ticker",
-            labels={"AnnVol": "Annualized Volatility", "Date": "Date"},
-        )
-        fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        if vol_df.empty:
+            st.info("Not enough data to compute rolling volatility for the current window.")
+        else:
+            fig = px.line(
+                vol_df, x="Date", y="AnnVol", color="Ticker",
+                labels={"AnnVol": "Annualized Volatility", "Date": "Date"},
+            )
+            fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
+            st.plotly_chart(fig, use_container_width=True)
 with right:
     # ---------- build the data used by either view ----------
     # Latest price per ticker
@@ -746,6 +744,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
