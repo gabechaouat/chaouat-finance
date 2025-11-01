@@ -461,7 +461,7 @@ with left:
         st.plotly_chart(fig, use_container_width=True)
 
     else:  # Rolling Volatility
-    vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+        vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
 
     if vol_df.empty:
         st.info("Not enough data to compute rolling volatility for the current window.")
@@ -746,6 +746,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
