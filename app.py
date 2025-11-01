@@ -105,6 +105,47 @@ def scan_volatility(tickers: list[str], lookback_days: int, use_log: bool) -> pd
     df = pd.DataFrame(out, columns=["Ticker", "AnnVol"]).dropna()
     df = df.sort_values("AnnVol", ascending=False).reset_index(drop=True)
     return df
+    
+@st.cache_data(ttl=60*60)
+def scan_price_change(tickers: list[str], lookback_days: int) -> pd.DataFrame:
+    """
+    Return DataFrame ['Ticker','Ret'] where Ret is % change over the last lookback_days (trading).
+    """
+    if not tickers:
+        return pd.DataFrame(columns=["Ticker", "Ret"])
+
+    # convert trading days to calendar days (buffered)
+    cal_days = int(lookback_days * 1.6) + 10
+    start = dt.date.today() - dt.timedelta(days=cal_days)
+
+    data = yf.download(
+        tickers, start=start, end=dt.date.today(),
+        interval="1d", auto_adjust=True, progress=False,
+        group_by="ticker", threads=True
+    )
+
+    out = []
+    for sym in tickers:
+        try:
+            if isinstance(data.columns, pd.MultiIndex):
+                close = data[(sym, "Close")].dropna()
+            else:
+                close = data["Close"].dropna()
+
+            # restrict to last lookback_days trading points
+            close = close.tail(lookback_days + 1)
+            if close.size < 2:
+                continue
+
+            ret = (close.iloc[-1] / close.iloc[0]) - 1.0
+            out.append((sym, float(ret)))
+        except Exception:
+            continue
+
+    df = pd.DataFrame(out, columns=["Ticker", "Ret"]).dropna()
+    return df
+
+
 @st.cache_data(show_spinner=True)
 def fetch_history_multi(syms: list[str], start_d, end_d):
     """Batch download and return a tidy DataFrame: Date, Ticker, Close."""
@@ -506,96 +547,188 @@ with right:
 
 # === TOP / BOTTOM VOLATILITY ===
 if run_scan:
-    st.subheader("Volatility leaders and laggards")
+    st.subheader("Leaders and laggards")
 
-    # Use the S&P 500 universe you already load
+    # ---------- Controls shown ABOVE the charts ----------
+    c1, c2, c3, c4 = st.columns([1.1, 1.0, 1.4, 1.6])
+    with c1:
+        metric_mode = st.selectbox(
+            "Metric",
+            ["Volatility", "Price change"],
+            help="Rank by annualized volatility or by percent price change."
+        )
+    with c2:
+        top_n = st.slider("Top-N", 5, 50, 5, step=5, help="How many names to show.")
+    with c3:
+        vol_lookback = st.slider(
+            "Volatility window (trading days)",
+            20, 252, 60, help="Rolling window used for volatility ranking."
+        )
+    with c4:
+        chg_lookback = st.slider(
+            "Price change lookback (trading days)",
+            20, 252, 60, help="Period used to compute % change."
+        )
+
+    # compute bar width that shrinks as N grows (clamped)
+    bar_w = max(0.15, min(0.8, 8.0 / top_n))
+
+    # Universe
     universe = load_sp500_df()["Symbol"].dropna().unique().tolist()
 
-    with st.spinner("Scanning volatility across the S&P 500..."):
-        scan_df = scan_volatility(universe, lookback_days=lookback_days, use_log=use_log_returns)
+    if metric_mode == "Volatility":
+        with st.spinner("Scanning volatility across the S&P 500..."):
+            scan_df = scan_volatility(universe, lookback_days=vol_lookback, use_log=use_log_returns)
 
-    if scan_df.empty or len(scan_df) < 5:
-        st.info("Not enough data to compute the cross-section right now.")
-    else:
-        top5 = scan_df.head(5).copy()
-        bot5 = scan_df.sort_values("AnnVol", ascending=True).head(5).copy()
+        if scan_df.empty:
+            st.info("Not enough data to compute this cross-section.")
+        else:
+            # top N and bottom N by annualized vol
+            topN = scan_df.head(top_n).copy()
+            botN = scan_df.sort_values("AnnVol", ascending=True).head(top_n).copy()
 
-        # Format percent for labels (as strings) and keep numeric for axis
-        top5["VolPct"] = (top5["AnnVol"] * 100).round(2)
-        top5["VolPctStr"] = top5["VolPct"].astype(str) + "%"
-        bot5["VolPct"] = (bot5["AnnVol"] * 100).round(2)
-        bot5["VolPctStr"] = bot5["VolPct"].astype(str) + "%"
+            topN["VolPct"] = (topN["AnnVol"] * 100).round(2)
+            topN["VolPctStr"] = topN["VolPct"].astype(str) + "%"
+            botN["VolPct"] = (botN["AnnVol"] * 100).round(2)
+            botN["VolPctStr"] = botN["VolPct"].astype(str) + "%"
 
-        # Nice blue palettes
-        blues_top = px.colors.sequential.Blues[-5:]       # darker blues for Top 5
-        blues_bot = px.colors.sequential.Blues[2:7]       # lighter blues for Bottom 5
+            blues_top = px.colors.sequential.Blues[-5:] + px.colors.sequential.Blues[-5:]  # repeat if N>5
+            blues_bot = px.colors.sequential.Blues[2:7] + px.colors.sequential.Blues[2:7]
 
-        leftc, rightc = st.columns(2, gap="large")
+            leftc, rightc = st.columns(2, gap="large")
 
-        with leftc:
-            st.markdown("**Top 5 highest volatility**")
-
-            fig_top = px.bar(top5, x="Ticker", y="AnnVol", text="VolPctStr")
-            fig_top.update_traces(
-                marker_color=px.colors.sequential.Blues[-5:],
-                textposition="outside",
-                textfont=dict(size=12),
-                hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
-                customdata=top5["AnnVol"],
-            )
-            fig_top.update_layout(
-                yaxis_title="Annualized Volatility",
-                xaxis_title="",
-                height=360,
-                margin=dict(l=60, r=10, t=30, b=60),   # unified margins
-                showlegend=False,
-            )
-            fig_top.update_xaxes(showticklabels=False)
-
-            # clickable ticker labels, perfectly aligned under bars (inside the figure)
-            for x in top5["Ticker"]:
-                fig_top.add_annotation(
-                    x=x, xref="x",
-                    y=-0.18, yref="paper",
-                    text=f"<a href='?sym={x}'>{x}</a>",
-                    showarrow=False, align="center",
-                    font=dict(color="#005F7D", size=12)
+            with leftc:
+                st.markdown("**Highest volatility**")
+                fig_top = px.bar(topN, x="Ticker", y="AnnVol", text="VolPctStr")
+                fig_top.update_traces(
+                    width=bar_w,
+                    marker_color=blues_top[:len(topN)],
+                    textposition="outside",
+                    textfont=dict(size=12),
+                    customdata=topN["AnnVol"],
+                    hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
                 )
-
-            st.plotly_chart(fig_top, use_container_width=True)
-
-
-
-        with rightc:
-            st.markdown("**Top 5 lowest volatility**")
-
-            fig_bot = px.bar(bot5, x="Ticker", y="AnnVol", text="VolPctStr")
-            fig_bot.update_traces(
-                marker_color=px.colors.sequential.Blues[2:7],
-                textposition="outside",
-                textfont=dict(size=12),
-                hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
-                customdata=bot5["AnnVol"],
-            )
-            fig_bot.update_layout(
-                yaxis_title="Annualized Volatility",
-                xaxis_title="",
-                height=360,
-                margin=dict(l=60, r=10, t=30, b=60),   # same as left
-                showlegend=False,
-            )
-            fig_bot.update_xaxes(showticklabels=False)
-
-            for x in bot5["Ticker"]:
-                fig_bot.add_annotation(
-                    x=x, xref="x",
-                    y=-0.18, yref="paper",
-                    text=f"<a href='?sym={x}'>{x}</a>",
-                    showarrow=False, align="center",
-                    font=dict(color="#005F7D", size=12)
+                fig_top.update_layout(
+                    yaxis_title="Annualized Volatility",
+                    xaxis_title="",
+                    bargap=0.25,
+                    height=360,
+                    margin=dict(l=60, r=10, t=30, b=60),
+                    showlegend=False,
                 )
+                fig_top.update_xaxes(showticklabels=False)
+                for x in topN["Ticker"]:
+                    fig_top.add_annotation(
+                        x=x, xref="x", y=-0.18, yref="paper",
+                        text=f"<a href='?sym={x}'>{x}</a>",
+                        showarrow=False, align="center",
+                        font=dict(color="#005F7D", size=12)
+                    )
+                st.plotly_chart(fig_top, use_container_width=True)
 
-            st.plotly_chart(fig_bot, use_container_width=True)  # <-- keep INSIDE with rightc:
+            with rightc:
+                st.markdown("**Lowest volatility**")
+                fig_bot = px.bar(botN, x="Ticker", y="AnnVol", text="VolPctStr")
+                fig_bot.update_traces(
+                    width=bar_w,
+                    marker_color=px.colors.sequential.Blues[2:7][:len(botN)],
+                    textposition="outside",
+                    textfont=dict(size=12),
+                    customdata=botN["AnnVol"],
+                    hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
+                )
+                fig_bot.update_layout(
+                    yaxis_title="Annualized Volatility",
+                    xaxis_title="",
+                    bargap=0.25,
+                    height=360,
+                    margin=dict(l=60, r=10, t=30, b=60),
+                    showlegend=False,
+                )
+                fig_bot.update_xaxes(showticklabels=False)
+                for x in botN["Ticker"]:
+                    fig_bot.add_annotation(
+                        x=x, xref="x", y=-0.18, yref="paper",
+                        text=f"<a href='?sym={x}'>{x}</a>",
+                        showarrow=False, align="center",
+                        font=dict(color="#005F7D", size=12)
+                    )
+                st.plotly_chart(fig_bot, use_container_width=True)
+
+    else:  # Price change mode
+        with st.spinner("Scanning price changes across the S&P 500..."):
+            r_df = scan_price_change(universe, lookback_days=chg_lookback)
+
+        if r_df.empty:
+            st.info("Not enough data to compute this cross-section.")
+        else:
+            # gainers and losers
+            gainers = r_df.sort_values("Ret", ascending=False).head(top_n).copy()
+            losers  = r_df.sort_values("Ret", ascending=True).head(top_n).copy()
+
+            for df_ in (gainers, losers):
+                df_["RetPct"] = (df_["Ret"] * 100).round(2)
+                df_["RetPctStr"] = df_["RetPct"].astype(str) + "%"
+
+            leftc, rightc = st.columns(2, gap="large")
+
+            with leftc:
+                st.markdown("**Top gainers**")
+                fig_g = px.bar(gainers, x="Ticker", y="Ret", text="RetPctStr")
+                fig_g.update_traces(
+                    width=bar_w,
+                    marker_color=px.colors.sequential.Blues[-5:][:len(gainers)],
+                    textposition="outside",
+                    textfont=dict(size=12),
+                    customdata=gainers["Ret"],
+                    hovertemplate="<b>%{x}</b><br>Change: %{customdata:.2%}<extra></extra>",
+                )
+                fig_g.update_layout(
+                    yaxis_title=f"Return over {chg_lookback} trading days",
+                    xaxis_title="",
+                    bargap=0.25,
+                    height=360,
+                    margin=dict(l=60, r=10, t=30, b=60),
+                    showlegend=False,
+                )
+                fig_g.update_xaxes(showticklabels=False)
+                for x in gainers["Ticker"]:
+                    fig_g.add_annotation(
+                        x=x, xref="x", y=-0.18, yref="paper",
+                        text=f"<a href='?sym={x}'>{x}</a>",
+                        showarrow=False, align="center",
+                        font=dict(color="#005F7D", size=12)
+                    )
+                st.plotly_chart(fig_g, use_container_width=True)
+
+            with rightc:
+                st.markdown("**Top losers**")
+                fig_l = px.bar(losers, x="Ticker", y="Ret", text="RetPctStr")
+                fig_l.update_traces(
+                    width=bar_w,
+                    marker_color=px.colors.sequential.Blues[2:7][:len(losers)],
+                    textposition="outside",
+                    textfont=dict(size=12),
+                    customdata=losers["Ret"],
+                    hovertemplate="<b>%{x}</b><br>Change: %{customdata:.2%}<extra></extra>",
+                )
+                fig_l.update_layout(
+                    yaxis_title=f"Return over {chg_lookback} trading days",
+                    xaxis_title="",
+                    bargap=0.25,
+                    height=360,
+                    margin=dict(l=60, r=10, t=30, b=60),
+                    showlegend=False,
+                )
+                fig_l.update_xaxes(showticklabels=False)
+                for x in losers["Ticker"]:
+                    fig_l.add_annotation(
+                        x=x, xref="x", y=-0.18, yref="paper",
+                        text=f"<a href='?sym={x}'>{x}</a>",
+                        showarrow=False, align="center",
+                        font=dict(color="#005F7D", size=12)
+                    )
+                st.plotly_chart(fig_l, use_container_width=True)
 
 
 
@@ -613,6 +746,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
