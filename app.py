@@ -556,7 +556,7 @@ if run_scan:
     st.subheader("Leaders and laggards")
 
     # ---------- Controls shown ABOVE the charts ----------
-    c1, c2, c3, c4 = st.columns([1.1, 1.0, 1.4, 1.6])
+    c1, c2 = st.columns([1.1, 1.0])
     with c1:
         metric_mode = st.selectbox(
             "Metric",
@@ -564,17 +564,29 @@ if run_scan:
             help="Rank by annualized volatility or by percent price change."
         )
     with c2:
-        top_n = st.slider("Top-N", 5, 50, 5, step=5, help="How many names to show.")
-    with c3:
-        vol_lookback = st.slider(
-            "Volatility window (trading days)",
-            20, 252, 60, help="Rolling window used for volatility ranking."
-        )
-    with c4:
-        chg_lookback = st.slider(
-            "Price change lookback (trading days)",
-            20, 252, 60, help="Period used to compute % change."
-        )
+        # allow Top-N from 1, step 1
+        top_n = st.slider("Top-N", 1, 50, 5, step=1, help="How many names to show.")
+
+    # show only the relevant lookback slider for the chosen metric
+    vol_lookback = None
+    chg_lookback = None
+    if metric_mode == "Volatility":
+        c3 = st.columns([1.4])[0]
+        with c3:
+            vol_lookback = st.slider(
+                "Volatility window (trading days)",
+                20, 252, 60,
+                help="Rolling window used for volatility ranking."
+            )
+    else:
+        c4 = st.columns([1.6])[0]
+        with c4:
+            chg_lookback = st.slider(
+                "Price change lookback (trading days)",
+                20, 252, 60,
+                help="Period used to compute % change."
+            )
+
 
     # compute bar width that shrinks as N grows (clamped)
     bar_w = max(0.15, min(0.8, 8.0 / top_n))
@@ -752,6 +764,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
