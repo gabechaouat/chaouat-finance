@@ -464,7 +464,7 @@ pick = st.multiselect(
     help="Start typing (e.g., NVDA, MSFT)."
 )
 
-    custom = st.text_input("Optional extra symbols (comma-separated)").strip()
+custom = st.text_input("Optional extra symbols (comma-separated)").strip()
     if custom:
         extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
         pick = (pick + extra)[:4]  # enforce max 4 total
@@ -845,6 +845,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
