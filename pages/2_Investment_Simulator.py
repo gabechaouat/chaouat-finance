@@ -100,12 +100,31 @@ with left:
     days = (last_dt.date() - first_dt.date()).days
     cagr = (final_value / amount) ** (365.0 / days) - 1.0 if days > 0 else np.nan
 
-    # --- chart ---
-# Build a tidy DataFrame for plotting (works on all pandas versions)
-seg = close.loc[first_dt:last_dt]              # Series indexed by DatetimeIndex
-seg = seg.rename("Adj Close ($)")              # set the Series name (will become column name)
-seg = seg.reset_index()                        # -> DataFrame with columns ["index", "Adj Close ($)"]
-seg = seg.rename(columns={"index": "Date"})    # rename the index column to "Date"
+   # --- chart (robust to Series or DataFrame) ---
+seg = close.loc[first_dt:last_dt]
+
+# Ensure we have a DataFrame with a single column named "Adj Close ($)"
+if isinstance(seg, pd.Series):
+    # seg is a Series → convert to DataFrame with the desired column name
+    seg = seg.to_frame(name="Adj Close ($)")
+else:
+    # seg is a DataFrame (yfinance sometimes returns this shape)
+    seg = seg.copy()
+    if seg.shape[1] == 1:
+        # single unnamed/named column → set our label
+        seg.columns = ["Adj Close ($)"]
+    elif "Adj Close" in seg.columns:
+        seg = seg.rename(columns={"Adj Close": "Adj Close ($)"})
+    elif "Adj Close ($)" not in seg.columns and "Close" in seg.columns:
+        seg = seg.rename(columns={"Close": "Adj Close ($)"})
+
+# Reset index to a proper Date column regardless of original index name
+seg = seg.reset_index()
+if "index" in seg.columns:
+    seg = seg.rename(columns={"index": "Date"})
+elif seg.columns[0] != "Date":
+    # first column is the datetime after reset_index
+    seg = seg.rename(columns={seg.columns[0]: "Date"})
 
 fig = px.line(seg, x="Date", y="Adj Close ($)", title=f"{ticker} price")
 fig.update_layout(height=420, margin=dict(l=10, r=10, t=40, b=10))
