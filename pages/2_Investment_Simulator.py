@@ -132,13 +132,20 @@ init_rows = pd.DataFrame(
         {"Ticker": "",     "Buy date": dt.date.today() - dt.timedelta(days=100), "Cash ($)": None,  "Shares": None, "Manual price ($)": None},
     ]
 )
+sp_syms = load_sp500_df()["Symbol"].dropna().unique().tolist()
 lots_df = st.data_editor(
     init_rows,
     num_rows="dynamic",
     use_container_width=True,
     hide_index=True,
     column_config={
-        "Ticker": st.column_config.TextColumn(width="small", help="e.g., AAPL, MSFT"),
+        "Ticker": st.column_config.SelectboxColumn(
+            options=sp_syms,            # type-ahead suggestions
+            width="small",
+            help="Start typing (e.g., AAPL, MSFT).",
+            required=False,
+        ),
+
         "Buy date": st.column_config.DateColumn(format="YYYY/MM/DD"),
         "Cash ($)": st.column_config.NumberColumn(min_value=0.0, step=10.0),
         "Shares": st.column_config.NumberColumn(min_value=0.0, step=0.01, help="If provided, used directly."),
@@ -220,9 +227,17 @@ agg = agg.sort_values("Value", ascending=False).reset_index(drop=True)
 left, right = st.columns([2.2, 1], gap="large")
 
 with left:
-    # Single-ticker header with logo + name + price chart
-    uniq = agg["Ticker"].unique().tolist()
+    # Chart option for multiple tickers
+    norm_to_100 = st.toggle(
+        "Normalize to 100 at each ticker's first buy date",
+        value=True,
+        help="Helps compare tickers on the same scale."
+    )
+    # ---------- header + chart ----------
+    uniq = positions["Ticker"].unique().tolist()
+
     if len(uniq) == 1:
+        # Single-ticker header with logo + name + price chart
         sym = uniq[0]
         name, logo = get_company_meta(sym)
         logo_html = f'<img src="{logo}" alt="{sym} logo" class="cf-logo"/>' if logo else ""
@@ -244,6 +259,46 @@ with left:
         fig = px.line(chart_df, x="Date", y="Adj Close ($)", title=f"{sym} price")
         fig.update_layout(height=420, margin=dict(l=10, r=10, t=40, b=10))
         st.plotly_chart(fig, use_container_width=True)
+
+    else:
+        # Multiple tickers: overlay in one chart
+        rows = []
+        multi_cols = isinstance(raw_prices.columns, pd.MultiIndex)
+
+        for sym in uniq:
+            try:
+                df_sym = raw_prices[sym] if multi_cols else raw_prices
+                s = _adj_close_series(df_sym)
+                if s.empty:
+                    continue
+
+                first_buy = positions.loc[positions["Ticker"] == sym, "Buy date"].min()
+                seg = s.loc[pd.to_datetime(first_buy):pd.to_datetime(sell_date)].rename("Price")
+                if seg.empty:
+                    continue
+
+                df = seg.reset_index().rename(columns={"index": "Date"})
+                if norm_to_100:
+                    base = float(seg.iloc[0])
+                    if base > 0:
+                        df["Price"] = 100.0 * df["Price"] / base
+                df["Ticker"] = sym
+                rows.append(df)
+            except Exception:
+                continue
+
+        if not rows:
+            st.info("Not enough data to draw the comparison chart.")
+        else:
+            overlay = pd.concat(rows, ignore_index=True)
+            y_label = "Index (100 = first buy)" if norm_to_100 else "Adj Close ($)"
+            fig = px.line(
+                overlay,
+                x="Date", y="Price", color="Ticker",
+                labels={"Price": y_label, "Date": "Date"}
+            )
+            fig.update_layout(height=420, margin=dict(l=10, r=10, t=30, b=10))
+            st.plotly_chart(fig, use_container_width=True)
 
 with right:
     st.subheader("Summary")
