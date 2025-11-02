@@ -221,6 +221,7 @@ def load_tickers():
 
 # --- Page and style setup ---
 st.set_page_config(page_title="Chaouat Finance", page_icon="💹", layout="wide")
+st.markdown('<div class="cf-sticky">Chaouat Finance</div>', unsafe_allow_html=True)
 pio.templates.default = "plotly_white"
 
 # --- Custom CSS: Montserrat + cerulean design + header ---
@@ -336,6 +337,28 @@ small, .cf-foot{
   display: block;
   text-align: center;
 }
+/* Small sticky header */
+.cf-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: #fff;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 6px 14px rgba(0,0,0,.08);
+  border-radius: 0 0 10px 10px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  font-size: 18px;   /* small */
+}
+
+/* Ensure content isn’t hidden under the sticky bar on very top loads */
+body { scroll-padding-top: 54px; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -764,6 +787,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
