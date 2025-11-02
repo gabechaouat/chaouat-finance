@@ -465,10 +465,9 @@ pick = st.multiselect(
 )
 
 custom = st.text_input("Optional extra symbols (comma-separated)").strip()
-    if custom:
-        extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
-        pick = (pick + extra)[:4]  # enforce max 4 total
-
+if custom:
+    extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
+    pick = (pick + extra)[:4]  # enforce max 4 total
     years = st.slider("History (years)", 1, 10, 5)
     vol_window = st.slider("Rolling volatility window (trading days)", 5, 252, 20)
     use_log_returns = st.toggle("Use log returns (recommended)", True)
@@ -845,6 +844,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
