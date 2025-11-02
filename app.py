@@ -382,8 +382,8 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.title("Stock Volatility Dashboard")
-st.caption("Data source: Yahoo Finance via yfinance (unofficial).")
+st.title("Stock Analysis Dashboard")
+st.caption("Data source: Yahoo Finance via yfinance.")
 
 # Optional: deep-link into a ticker with ?sym=XXXX
 qp = get_query_params()
@@ -396,21 +396,74 @@ if "sym" in qp:
         default_pick = [s.upper() for s in _sym_qs][:4]
 else:
     default_pick = ["AAPL"]
-
+# Broad category presets -> underlying S&P sectors
+CATEGORY_PRESETS = {
+    "All": [],
+    "Tech": ["Information Technology", "Communication Services"],
+    "Finance": ["Financials"],
+    "Health": ["Health Care"],
+    "Energy": ["Energy"],
+    "Consumer": ["Consumer Discretionary", "Consumer Staples"],
+    "Industrials": ["Industrials"],
+    "Utilities": ["Utilities"],
+    "Materials": ["Materials"],
+    "Real Estate": ["Real Estate"],
+    # "Sports" is not a GICS sector; this preset approximates sports-related names
+    # via brands/media (Discretionary) + media rights/broadcasters (Comm Services).
+    "Sports (brands & media)": ["Consumer Discretionary", "Communication Services"],
+}
 
 with st.sidebar:
     st.header("Settings")
 
+    # Load S&P universe with sectors
+sp500 = load_sp500_df()
+sp500["Sector"] = sp500["Sector"].fillna("Unknown")
+all_symbols = sp500["Symbol"].dropna().unique().tolist()
+
+# --- Filters ---
+st.subheader("Filter universe")
+
+# Quick preset (maps to multiple sectors)
+preset = st.selectbox(
+    "Category preset",
+    list(CATEGORY_PRESETS.keys()),
+    help="Choose a broad category. You can still refine sectors below."
+)
+
+# Manual sector selector (multi). Pre-select based on preset (if not 'All').
+sector_options = sorted(sp500["Sector"].unique())
+pre_selected = CATEGORY_PRESETS[preset] if preset != "All" else []
+picked_sectors = st.multiselect(
+    "Sectors",
+    sector_options,
+    default=pre_selected,
+    help="Filter the ticker list by S&P 500 sector(s). Leave empty for all."
+)
+
+# Compute the filtered symbol universe
+if picked_sectors:
+    f_syms = sp500.loc[sp500["Sector"].isin(picked_sectors), "Symbol"].dropna().unique().tolist()
+else:
+    f_syms = all_symbols
+
+st.caption(f"Universe size: {len(f_syms)} tickers")
+
+
     sp500 = load_sp500_df()
     sp_syms = sp500["Symbol"].dropna().unique().tolist()
 
+    # Keep default selection if still valid; otherwise fall back to AAPL if present
+    default_safe = [s for s in default_pick if s in f_syms] or (["AAPL"] if "AAPL" in f_syms else f_syms[:1])
+
     pick = st.multiselect(
         "Select up to 4 tickers (type to search)",
-        options=sp_syms,
-        default=default_pick,
+        options=sorted(f_syms),
+        default=default_safe,
         max_selections=4,
         help="Start typing (e.g., NVDA, MSFT)."
     )
+
     custom = st.text_input("Optional extra symbols (comma-separated)").strip()
     if custom:
         extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
@@ -792,6 +845,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
