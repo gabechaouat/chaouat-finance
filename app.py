@@ -14,9 +14,42 @@ def get_query_params():
         return st.experimental_get_query_params()
 
 @st.cache_data(ttl=24*60*60)
-def load_sp500_df():
+def load_sp500_df() -> pd.DataFrame:
     url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv"
-    return pd.read_csv(url)  # columns: Symbol, Name, Sector...
+    df = pd.read_csv(url)
+
+    # Normalize column names
+    norm = {c: c.strip() for c in df.columns}
+    df = df.rename(columns=norm)
+
+    # Find a sector-like column (handles "Sector", "GICS Sector", odd spacing, etc.)
+    sector_col = None
+    for c in df.columns:
+        if c.strip().lower() in {"sector", "gics sector"}:
+            sector_col = c
+            break
+
+    if sector_col is None:
+        # No sector info in the file; create placeholder
+        df["Sector"] = "Unknown"
+    else:
+        # Standardize to "Sector"
+        if sector_col != "Sector":
+            df = df.rename(columns={sector_col: "Sector"})
+        df["Sector"] = df["Sector"].fillna("Unknown").astype(str)
+
+    # Standardize symbol column name and formatting
+    sym_col = "Symbol" if "Symbol" in df.columns else ("Ticker" if "Ticker" in df.columns else None)
+    if sym_col is None:
+        raise ValueError("S&P500 file has no Symbol/Ticker column.")
+    if sym_col != "Symbol":
+        df = df.rename(columns={sym_col: "Symbol"})
+    df["Symbol"] = df["Symbol"].astype(str).str.upper().str.strip()
+
+    # Keep only what we need
+    keep_cols = ["Symbol", "Name"] + (["Sector"] if "Sector" in df.columns else [])
+    return df[keep_cols]
+
 
 @st.cache_data(ttl=6*60*60)
 def get_company_meta(sym: str):
@@ -844,6 +877,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
