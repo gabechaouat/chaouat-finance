@@ -337,11 +337,14 @@ small, .cf-foot{
   display: block;
   text-align: center;
 }
-/* Small sticky header */
+/* Small fixed header that always stays on top */
 .cf-sticky {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 9999;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  width: 100%;
   background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
   color: #fff;
   height: 44px;
@@ -350,15 +353,15 @@ small, .cf-foot{
   padding: 0 14px;
   border-bottom: 1px solid rgba(255,255,255,.15);
   box-shadow: 0 6px 14px rgba(0,0,0,.08);
-  border-radius: 0 0 10px 10px;
   font-weight: 700;
   letter-spacing: .2px;
-  font-size: 18px;   /* small */
+  font-size: 18px; /* small */
 }
 
-/* Ensure content isn’t hidden under the sticky bar on very top loads */
-body { scroll-padding-top: 54px; }
-
+/* Push main content down so it doesn't sit under the fixed bar */
+[data-testid="stAppViewContainer"] > .main {
+  padding-top: 54px; /* header 44px + 10px breathing room */
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -548,6 +551,7 @@ with right:
         st.dataframe(
             comp,
             use_container_width=True,
+            height=180,
             column_config={
                 "Last Price ($)": st.column_config.NumberColumn(format="%.2f"),
                 f"Vol {vol_window}d (ann)": st.column_config.NumberColumn(format="%.2f%%"),
@@ -776,7 +780,8 @@ if run_scan:
 st.subheader("Data")
 st.dataframe(
     prices_all.sort_values(["Ticker","Date"]).tail(400),
-    use_container_width=True
+    use_container_width=True,
+    height=180  # ≈ 4 rows visible; scroll for more
 )
 st.download_button(
     "Download CSV",
@@ -787,6 +792,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
