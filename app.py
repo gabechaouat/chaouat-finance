@@ -6,6 +6,8 @@ import plotly.express as px
 import plotly.io as pio
 import streamlit as st
 import yfinance as yf
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
 def get_query_params():
     try:
@@ -252,6 +254,43 @@ def compute_rolling_vol(df_prices: pd.DataFrame, window: int, use_log: bool) -> 
     # keep only what we need, drop rows where we don't have vol yet
     out = df.dropna(subset=["AnnVol"])[["Date", "Ticker", "AnnVol"]]
     return out
+    
+def compute_indicators(df_prices: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """
+    Return a dict[ticker] -> DataFrame(Date index) with:
+    Close, Return, SMA50, SMA200, Drawdown, RSI14.
+    """
+    out: dict[str, pd.DataFrame] = {}
+    if df_prices.empty:
+        return out
+
+    df = df_prices.sort_values(["Ticker", "Date"]).copy()
+    for tkr, g in df.groupby("Ticker"):
+        s = g.set_index("Date")["Close"].astype(float)
+        ret = s.pct_change()
+
+        sma50 = s.rolling(50).mean()
+        sma200 = s.rolling(200).mean()
+
+        # 52w rolling max for drawdown
+        roll_max = s.rolling(252, min_periods=1).max()
+        dd = (s / roll_max) - 1.0
+
+        # RSI(14)
+        delta = s.diff()
+        gain = delta.clip(lower=0.0)
+        loss = -delta.clip(upper=0.0)
+        avg_gain = gain.rolling(14).mean()
+        avg_loss = loss.rolling(14).mean()
+        rs = avg_gain / avg_loss.replace(0, np.nan)
+        rsi = 100.0 - (100.0 / (1.0 + rs))
+
+        out[tkr] = pd.DataFrame(
+            {"Close": s, "Return": ret, "SMA50": sma50, "SMA200": sma200,
+             "Drawdown": dd, "RSI14": rsi}
+        )
+    return out
+
 
 def load_tickers():
     # S&P 500 symbols (fast and lightweight). You can swap this URL later.
@@ -516,8 +555,14 @@ with st.sidebar:
     use_log_returns = st.toggle("Use log returns (recommended)", True)
 
     st.divider()
-    st.subheader("Chart mode")
-    chart_mode = st.radio("What to overlay?", ["Price", "Rolling Volatility"], horizontal=True)
+    st.subheader("Chart overlays")
+    chart_overlays = st.multiselect(
+        "Select overlays",
+        ["Price", "Rolling Volatility", "SMA 50", "SMA 200", "RSI (14)", "Drawdown"],
+        default=["Price"],
+        help="RSI and Drawdown are plotted on a secondary axis."
+    )
+
 
     st.divider()
     st.subheader("Cross-section scan")
@@ -667,14 +712,60 @@ with right:
         lp = float(last_prices.get(sym, np.nan)) if sym in last_prices.index else float("nan")
         lv = float(last_vol.get(sym, np.nan) * 100) if sym in last_vol.index else float("nan")
         yr = float(ytd_ret.get(sym, np.nan) * 100) if sym in ytd_ret.index else float("nan")
+        # Indicators for single symbol
+        ind = ind_map.get(sym)
+        if ind is not None and not ind.empty:
+            last = ind.iloc[-1]
+            # 52-week stats (use last 252 trading days)
+            last_252 = ind.tail(252)
+            high_52w = last_252["Close"].max()
+            low_52w  = last_252["Close"].min()
+            max_dd   = float(ind["Drawdown"].min())
 
-        c1, c2, c3 = st.columns(3)
-        if not np.isnan(lp):
-            c1.metric("Last Price ($)", f"{lp:.2f}")
-        if not np.isnan(lv):
-            c2.metric(f"Vol {vol_window}d (ann)", f"{lv:.2f}%")
-        if not np.isnan(yr):
-            c3.metric("YTD Return", f"{yr:.2f}%")
+            # Sharpe over last 1y (simple, not risk-free adjusted)
+            ret_1y = last_252["Return"].dropna()
+            sharpe_1y = float((ret_1y.mean() * np.sqrt(252)) / ret_1y.std()) if ret_1y.std() > 0 else np.nan
+
+            # Beta vs S&P 500 over last 1y
+            try:
+                spy = yf.download("^GSPC", start=ret_1y.index.min(), end=ret_1y.index.max(),
+                                  auto_adjust=True, progress=False)["Close"].pct_change()
+                common = ret_1y.index.intersection(spy.index)
+                beta = float(ret_1y.loc[common].cov(spy.loc[common]) / spy.loc[common].var()) if spy.loc[common].var() > 0 else np.nan
+            except Exception:
+                beta = np.nan
+        else:
+            high_52w = low_52w = max_dd = sharpe_1y = beta = np.nan
+
+        row1 = st.columns(3)
+    if not np.isnan(lp):
+        row1[0].metric("Last Price ($)", f"{lp:.2f}")
+    if not np.isnan(lv):
+        row1[1].metric(f"Vol {vol_window}d (ann)", f"{lv:.2f}%")
+    if not np.isnan(yr):
+        row1[2].metric("YTD Return", f"{yr:.2f}%")
+
+    row2 = st.columns(3)
+    if not np.isnan(high_52w):
+        row2[0].metric("52-Week High", f"{high_52w:.2f}")
+    if not np.isnan(low_52w):
+        row2[1].metric("52-Week Low", f"{low_52w:.2f}")
+    if not np.isnan(max_dd):
+        row2[2].metric("Max Drawdown", f"{max_dd*100:.2f}%")
+
+    row3 = st.columns(3)
+    # latest RSI and SMAs from the indicator table
+    rsi_last = ind_map.get(sym)["RSI14"].iloc[-1] if ind_map.get(sym) is not None else np.nan
+    sma50_last = ind_map.get(sym)["SMA50"].iloc[-1] if ind_map.get(sym) is not None else np.nan
+    sma200_last = ind_map.get(sym)["SMA200"].iloc[-1] if ind_map.get(sym) is not None else np.nan
+
+    if not np.isnan(rsi_last):
+        row3[0].metric("RSI (14)", f"{rsi_last:.1f}")
+    if not np.isnan(sharpe_1y):
+        row3[1].metric("Sharpe (1y)", f"{sharpe_1y:.2f}")
+    if not np.isnan(beta):
+        row3[2].metric("Beta vs S&P 500", f"{beta:.2f}")
+
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -893,6 +984,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
