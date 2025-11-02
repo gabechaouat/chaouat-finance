@@ -445,62 +445,63 @@ CATEGORY_PRESETS = {
     # via brands/media (Discretionary) + media rights/broadcasters (Comm Services).
     "Sports (brands & media)": ["Consumer Discretionary", "Communication Services"],
 }
-
 with st.sidebar:
     st.header("Settings")
 
     # Load S&P universe with sectors
-sp500 = load_sp500_df()
-sp500["Sector"] = sp500["Sector"].fillna("Unknown")
-all_symbols = sp500["Symbol"].dropna().unique().tolist()
+    sp500 = load_sp500_df()
+    sp500["Sector"] = sp500["Sector"].fillna("Unknown")
+    all_symbols = sp500["Symbol"].dropna().unique().tolist()
 
-# --- Filters ---
-st.subheader("Filter universe")
+    # --- Filters ---
+    st.subheader("Filter universe")
 
-# Quick preset (maps to multiple sectors)
-preset = st.selectbox(
-    "Category preset",
-    list(CATEGORY_PRESETS.keys()),
-    help="Choose a broad category. You can still refine sectors below."
-)
+    preset = st.selectbox(
+        "Category preset",
+        list(CATEGORY_PRESETS.keys()),
+        help="Choose a broad category. You can still refine sectors below."
+    )
 
-# Manual sector selector (multi). Pre-select based on preset (if not 'All').
-sector_options = sorted(sp500["Sector"].unique())
-pre_selected = CATEGORY_PRESETS[preset] if preset != "All" else []
-picked_sectors = st.multiselect(
-    "Sectors",
-    sector_options,
-    default=pre_selected,
-    help="Filter the ticker list by S&P 500 sector(s). Leave empty for all."
-)
+    sector_options = sorted(sp500["Sector"].unique())
+    pre_selected = CATEGORY_PRESETS[preset] if preset != "All" else []
+    picked_sectors = st.multiselect(
+        "Sectors",
+        sector_options,
+        default=pre_selected,
+        help="Filter the ticker list by S&P 500 sector(s). Leave empty for all."
+    )
 
-# Compute the filtered symbol universe
-if picked_sectors:
-    f_syms = sp500.loc[sp500["Sector"].isin(picked_sectors), "Symbol"].dropna().unique().tolist()
-else:
-    f_syms = all_symbols
+    # Filtered symbol universe
+    if picked_sectors:
+        f_syms = (
+            sp500.loc[sp500["Sector"].isin(picked_sectors), "Symbol"]
+            .dropna().unique().tolist()
+        )
+    else:
+        f_syms = all_symbols
 
-st.caption(f"Universe size: {len(f_syms)} tickers")
+    st.caption(f"Universe size: {len(f_syms)} tickers")
 
+    # Keep default selection if still valid
+    default_safe = [s for s in default_pick if s in f_syms] or (
+        ["AAPL"] if "AAPL" in f_syms else f_syms[:1]
+    )
 
-sp500 = load_sp500_df()
-sp_syms = sp500["Symbol"].dropna().unique().tolist()
+    pick = st.multiselect(
+        "Select up to 4 tickers (type to search)",
+        options=sorted(f_syms),
+        default=default_safe,
+        max_selections=4,
+        help="Start typing (e.g., NVDA, MSFT)."
+    )
 
-# Keep default selection if still valid; otherwise fall back to AAPL if present
-default_safe = [s for s in default_pick if s in f_syms] or (["AAPL"] if "AAPL" in f_syms else f_syms[:1])
+    # Optional free-text extra symbols
+    custom = st.text_input("Optional extra symbols (comma-separated)").strip()
+    if custom:
+        extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
+        pick = (pick + extra)[:4]  # enforce max 4 total
 
-pick = st.multiselect(
-    "Select up to 4 tickers (type to search)",
-    options=sorted(f_syms),
-    default=default_safe,
-    max_selections=4,
-    help="Start typing (e.g., NVDA, MSFT)."
-)
-
-custom = st.text_input("Optional extra symbols (comma-separated)").strip()
-if custom:
-    extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
-    pick = (pick + extra)[:4]  # enforce max 4 total
+    # Core chart controls — always defined (not under `if custom`)
     years = st.slider("History (years)", 1, 10, 5)
     vol_window = st.slider("Rolling volatility window (trading days)", 5, 252, 20)
     use_log_returns = st.toggle("Use log returns (recommended)", True)
@@ -509,19 +510,25 @@ if custom:
     st.subheader("Chart mode")
     chart_mode = st.radio("What to overlay?", ["Price", "Rolling Volatility"], horizontal=True)
 
-    # >>> Add these four lines (this defines lookback_days and run_scan) <<<
     st.divider()
     st.subheader("Cross-section scan")
     lookback_days = st.slider(
-        "Lookback (trading days) for scan", 20, 252, 60, key="scan_lookback",
+        "Lookback (trading days) for scan",
+        20, 252, 60,
+        key="scan_lookback",
         help="Window used to rank highest/lowest volatility across the S&P 500."
     )
-    run_scan = st.checkbox("Show Top 5 / Bottom 5 volatility lists", value=True, key="scan_toggle")
-    # <<< end inserted lines >>>
+    run_scan = st.checkbox(
+        "Show Top/Bottom lists",
+        value=True,
+        key="scan_toggle"
+    )
 
     st.divider()
     ttl_minutes = st.number_input("Data cache TTL (minutes)", min_value=1, value=60)
     refresh = st.button("Force refresh now")
+
+
 
 # date range AFTER sidebar variables exist
 start = dt.date.today() - dt.timedelta(days=365 * years)
@@ -877,6 +884,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
