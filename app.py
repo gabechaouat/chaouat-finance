@@ -449,10 +449,8 @@ with st.sidebar:
     st.header("Settings")
 
     # Load S&P universe with sectors
-    sp500 = load_sp500_df()
     sp500["Sector"] = sp500["Sector"].fillna("Unknown")
-    all_symbols = sp500["Symbol"].dropna().unique().tolist()
-
+    
     # --- Filters ---
     st.subheader("Filter universe")
 
@@ -884,6 +882,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
