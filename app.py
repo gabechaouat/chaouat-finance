@@ -450,19 +450,19 @@ else:
 st.caption(f"Universe size: {len(f_syms)} tickers")
 
 
-    sp500 = load_sp500_df()
-    sp_syms = sp500["Symbol"].dropna().unique().tolist()
+sp500 = load_sp500_df()
+sp_syms = sp500["Symbol"].dropna().unique().tolist()
 
-    # Keep default selection if still valid; otherwise fall back to AAPL if present
-    default_safe = [s for s in default_pick if s in f_syms] or (["AAPL"] if "AAPL" in f_syms else f_syms[:1])
+# Keep default selection if still valid; otherwise fall back to AAPL if present
+default_safe = [s for s in default_pick if s in f_syms] or (["AAPL"] if "AAPL" in f_syms else f_syms[:1])
 
-    pick = st.multiselect(
-        "Select up to 4 tickers (type to search)",
-        options=sorted(f_syms),
-        default=default_safe,
-        max_selections=4,
-        help="Start typing (e.g., NVDA, MSFT)."
-    )
+pick = st.multiselect(
+    "Select up to 4 tickers (type to search)",
+    options=sorted(f_syms),
+    default=default_safe,
+    max_selections=4,
+    help="Start typing (e.g., NVDA, MSFT)."
+)
 
     custom = st.text_input("Optional extra symbols (comma-separated)").strip()
     if custom:
@@ -845,6 +845,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
