@@ -101,11 +101,15 @@ with left:
     cagr = (final_value / amount) ** (365.0 / days) - 1.0 if days > 0 else np.nan
 
     # --- chart ---
-    seg = close.loc[first_dt:last_dt].rename("Adj Close ($)").reset_index(names="Date")
-    fig = px.line(seg, x="Date", y="Adj Close ($)", title=f"{ticker} price")
-    fig.update_layout(height=420, margin=dict(l=10, r=10, t=40, b=10))
+# Build a tidy DataFrame for plotting (works on all pandas versions)
+seg = close.loc[first_dt:last_dt]              # Series indexed by DatetimeIndex
+seg = seg.rename("Adj Close ($)")              # set the Series name (will become column name)
+seg = seg.reset_index()                        # -> DataFrame with columns ["index", "Adj Close ($)"]
+seg = seg.rename(columns={"index": "Date"})    # rename the index column to "Date"
 
-    st.plotly_chart(fig, use_container_width=True)
+fig = px.line(seg, x="Date", y="Adj Close ($)", title=f"{ticker} price")
+fig.update_layout(height=420, margin=dict(l=10, r=10, t=40, b=10))
+st.plotly_chart(fig, use_container_width=True)
 
 with right:
     st.subheader("Results")
