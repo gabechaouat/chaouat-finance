@@ -989,11 +989,18 @@ if run_scan:
         "Sharpe (1y)",
         "Beta vs S&P 500",
     ]
-    c1, c2 = st.columns([1.1, 1.0])
+    c1, c2, c3 = st.columns([1.1, 1.0, 1.2])
     with c1:
         metric_mode = st.selectbox("Metric", metrics_list, help="Pick a cross-sectional metric.")
     with c2:
         top_n = st.slider("Top-N", 1, 50, 5, step=1, help="How many names to show.")
+    with c3:
+        sector_choice = st.selectbox(
+            "Sector",
+            ["All"] + sorted(sp500["Sector"].dropna().unique().tolist()),
+            index=0,
+            help="Filter the universe to a single sector."
+        )
 
     # A single lookback control only for metrics that use it
     if metric_mode in ["Volatility", "Price change"]:
@@ -1010,10 +1017,18 @@ if run_scan:
     # compute bar width that shrinks as N grows (clamped)
     bar_w = max(0.15, min(0.8, 8.0 / top_n))
 
-    # Universe
-    universe = load_sp500_df()["Symbol"].dropna().unique().tolist()
+    # Universe filtered by sector selection
+    if sector_choice == "All":
+        universe = sp500["Symbol"].dropna().unique().tolist()
+    else:
+        universe = (
+            sp500.loc[sp500["Sector"] == sector_choice, "Symbol"]
+            .dropna().unique().tolist()
+        )
 
-    with st.spinner(f"Scanning {metric_mode.lower()} across the S&P 500..."):
+
+    scope = "S&P 500" if sector_choice == "All" else f"{sector_choice} sector"
+    with st.spinner(f"Scanning {metric_mode.lower()} across the {scope}..."):
         scan_df = scan_cross_section(metric_mode, universe, lookback_days, use_log_returns)
 
     if scan_df.empty:
@@ -1135,6 +1150,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
