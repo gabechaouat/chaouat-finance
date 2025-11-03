@@ -5,6 +5,31 @@ import feedparser
 import streamlit as st
 import pandas as pd
 from dateutil import parser as dtparse, tz
+# --- Deduplication helpers ---
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+import re
+
+TRACKING_PREFIXES = ("utm_", "mc_", "gclid", "fbclid")
+
+def normalize_url(u: str) -> str:
+    """Remove tracking params & normalize domain for duplicate detection."""
+    pu = urlparse(u)
+    q = [(k, v) for k, v in parse_qsl(pu.query, keep_blank_values=True)
+         if not k.lower().startswith(TRACKING_PREFIXES)]
+    pu = pu._replace(netloc=pu.netloc.lower().replace("www.", ""),
+                     query=urlencode(q, doseq=True),
+                     fragment="")
+    return urlunparse(pu)
+
+_ws = re.compile(r"\s+")
+_punct = re.compile(r"[^\w\s]")
+
+def normalize_title(t: str) -> str:
+    """Lowercase, remove punctuation & compress whitespace."""
+    t = t.lower()
+    t = _punct.sub(" ", t)
+    return _ws.sub(" ", t).strip()
+
 
 # ---------- Page config ----------
 st.set_page_config(page_title="Financial News", page_icon="📰", layout="wide")
