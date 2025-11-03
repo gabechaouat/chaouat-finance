@@ -1,0 +1,198 @@
+# pages/3_Financial_News.py
+import datetime as dt
+from urllib.parse import urlparse
+import feedparser
+import streamlit as st
+import pandas as pd
+from dateutil import parser as dtparse, tz
+
+# ---------- Page config ----------
+st.set_page_config(page_title="Financial News", page_icon="📰", layout="wide")
+
+# ---------- Styles + header (identique au style de la page principale) ----------
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+:root{
+  --primary:#007BA7; --primary-dark:#005F7D; --accent:#00B0FF;
+  --bg:#F7FAFC; --card:#FFFFFF; --text:#0F172A; --muted:#64748B;
+}
+html, body, * { font-family:'Montserrat', sans-serif !important; }
+[data-testid="stAppViewContainer"] > .main { padding-top: 54px; }
+.cf-sticky {
+  position: fixed; top:0; left:0; right:0; z-index:10000;
+  width:100%; height:44px; color:#fff;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  display:flex; align-items:center; padding:0 14px;
+  border-bottom:1px solid rgba(255,255,255,.15);
+  box-shadow:0 6px 14px rgba(0,0,0,.08);
+  font-weight:700; letter-spacing:.2px; font-size:18px;
+}
+.cf-hero{
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color:#fff; padding:28px 32px; border-radius:20px;
+  box-shadow:0 8px 24px rgba(0,123,167,.25); margin:8px 0 24px 0;
+}
+.cf-brand{ font-weight:700; font-size:40px; letter-spacing:.4px; }
+.cf-section{
+  background: var(--card); border:1px solid #E2E8F0; border-radius:18px;
+  padding:22px; box-shadow:0 8px 30px rgba(15,23,42,.06); margin:6px 0 24px 0;
+}
+.news-card{
+  border:1px solid #E2E8F0; border-radius:14px; padding:14px 14px;
+  margin-bottom:10px; background:#fff;
+}
+.news-title{ font-size:16px; font-weight:700; color:#0F172A; margin:0; }
+.news-meta{ color:var(--muted); font-size:13px; margin-top:4px; }
+.source-chip{
+  display:inline-flex; align-items:center; gap:8px; padding:4px 8px;
+  border:1px solid #E2E8F0; border-radius:999px; font-size:12px; color:#0F172A;
+  background:#F8FAFC;
+}
+.source-chip img{ width:16px; height:16px; border-radius:3px; }
+.search-row { margin-bottom: 10px; }
+</style>
+<div class="cf-sticky">Chaouat Finance</div>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="cf-hero">
+  <div class="cf-brand">Financial News</div>
+  <div>Fresh headlines from top finance outlets. Click to read the full story.</div>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------- Sources RSS ----------
+SOURCES = {
+    "Reuters – Business": "https://feeds.reuters.com/reuters/businessNews",
+    "Reuters – Mergers & Acquisitions": "https://feeds.reuters.com/reuters/mergersNews",
+    "NYT – DealBook": "https://rss.nytimes.com/services/xml/rss/nyt/DealBook.xml",
+    "Crunchbase News": "https://news.crunchbase.com/feed/",
+    # Google News requête M&A (7 derniers jours)
+    "Google News – M&A (7d)": "https://news.google.com/rss/search?q=acquisition+OR+acquires+OR+merger+OR+to+buy+when:7d&hl=en-US&gl=US&ceid=US:en",
+    # CNBC Top News (flux principal)
+    "CNBC – Top News": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+}
+
+# ---------- Helpers ----------
+def domain_from_url(url: str) -> str:
+    try:
+        return urlparse(url).netloc.replace("www.", "")
+    except Exception:
+        return ""
+
+def favicon_for(url: str) -> str:
+    dom = domain_from_url(url)
+    return f"https://www.google.com/s2/favicons?domain={dom}&sz=64" if dom else ""
+
+@st.cache_data(ttl=15*60, show_spinner=False)
+def fetch_feeds(selected_sources: list[str]) -> pd.DataFrame:
+    """Fetch and normalize items from multiple RSS/Atom feeds."""
+    rows = []
+    for name in selected_sources:
+        feed_url = SOURCES.get(name)
+        if not feed_url:
+            continue
+        try:
+            fp = feedparser.parse(feed_url)
+            for e in fp.entries:
+                link = e.get("link") or ""
+                title = e.get("title") or "(no title)"
+                published = e.get("published") or e.get("updated") or ""
+                try:
+                    # Best-effort parse
+                    ts = dtparse.parse(published).astimezone(tz.tzlocal()) if published else None
+                except Exception:
+                    ts = None
+                rows.append({
+                    "source": name,
+                    "title": title.strip(),
+                    "link": link,
+                    "published": ts,
+                    "domain": domain_from_url(link),
+                })
+        except Exception:
+            continue
+    if not rows:
+        return pd.DataFrame(columns=["source","title","link","published","domain"])
+    df = pd.DataFrame(rows).drop_duplicates(subset=["title","link"])
+    # Most recent first
+    df = df.sort_values("published", ascending=False, na_position="last").reset_index(drop=True)
+    return df
+
+def time_ago(ts: dt.datetime | None) -> str:
+    if not ts:
+        return ""
+    now = dt.datetime.now(tz=tz.tzlocal())
+    delta = now - ts
+    s = int(delta.total_seconds())
+    if s < 60: return f"{s}s ago"
+    m = s // 60
+    if m < 60: return f"{m}m ago"
+    h = m // 60
+    if h < 24: return f"{h}h ago"
+    d = h // 24
+    return f"{d}d ago"
+
+# ---------- Sidebar controls ----------
+with st.sidebar:
+    st.header("Sources")
+    default_sel = list(SOURCES.keys())  # tout sélectionné par défaut
+    picked_sources = st.multiselect("Pick sources", options=list(SOURCES.keys()), default=default_sel)
+    st.divider()
+    st.header("Filters")
+    q = st.text_input("Search headline (optional)", placeholder="acquires, merger, company name…")
+    days_limit = st.slider("Max age (days)", 1, 30, 7)
+    st.caption("Headlines older than this window are hidden.")
+    refresh = st.button("Refresh now")
+
+if refresh:
+    fetch_feeds.clear()
+
+# ---------- Fetch ----------
+df = fetch_feeds(picked_sources)
+if df.empty:
+    st.info("No news retrieved. Try different sources or refresh.")
+    st.stop()
+
+# Age filter
+cutoff = dt.datetime.now(tz=tz.tzlocal()) - dt.timedelta(days=days_limit)
+df = df[(df["published"].isna()) | (df["published"] >= cutoff)]
+
+# Text filter
+if q:
+    q_low = q.lower()
+    df = df[df["title"].str.lower().str.contains(q_low, na=False)]
+
+# ---------- Render ----------
+st.markdown('<div class="cf-section">', unsafe_allow_html=True)
+left, right = st.columns([2.2, 1], gap="large")
+
+with left:
+    st.subheader("Latest headlines")
+    for _, r in df.iterrows():
+        fav = favicon_for(r["link"])
+        meta = f'{r["source"]} · {r["domain"]}'
+        when = time_ago(r["published"])
+        st.markdown(
+            f"""
+            <div class="news-card">
+              <div class="news-title"><a href="{r['link']}" target="_blank" rel="noopener noreferrer">{r['title']}</a></div>
+              <div class="news-meta">
+                <span class="source-chip">
+                  {'<img src="'+fav+'" />' if fav else ''}{meta}
+                </span>
+                {' · ' + when if when else ''}
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+with right:
+    st.subheader("By source")
+    counts = df.groupby("source", as_index=False).size().sort_values("size", ascending=False)
+    st.dataframe(counts.rename(columns={"size":"Headlines"}), use_container_width=True, hide_index=True, height=250)
+    st.caption("Click a headline to open the original article in a new tab.")
+
+st.markdown('</div>', unsafe_allow_html=True)
