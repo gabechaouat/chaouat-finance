@@ -291,6 +291,7 @@ with st.sidebar:
 
 if refresh:
     fetch_feeds.clear()
+    st.session_state.news_page = 1
 
 # ---------- Fetch ----------
 df = fetch_feeds(picked_sources)
@@ -306,6 +307,13 @@ df = df[(df["published"].isna()) | (df["published"] >= cutoff)]
 if q:
     q_low = q.lower()
     df = df[df["title"].str.lower().str.contains(q_low, na=False)]
+# ---------- Global de-duplication (title + URL signatures) ----------
+if not df.empty:
+    df = df.copy()
+    df["t_sig"] = df["title"].astype(str).apply(normalize_title)
+    df["u_sig"] = df["link"].astype(str).apply(normalize_url)
+    df = df.drop_duplicates(subset=["t_sig", "u_sig"]).drop(columns=["t_sig", "u_sig"])
+
 # ---------- Pagination (5 headlines max on screen) ----------
 PAGE_SIZE = 5
 if "news_page" not in st.session_state:
@@ -328,17 +336,7 @@ left, right = st.columns([2.2, 1], gap="large")
 
 with left:
     st.subheader("Latest headlines")
-    # --- DEDUPE STATE ---
-    seen = set()
     for _, r in df_page.iterrows():
-        # --- DEDUPE CHECK ---
-        t_sig = normalize_title(r["title"])
-        u_sig = normalize_url(r["link"])
-
-        if t_sig in seen or u_sig in seen:
-            continue
-        seen.add(t_sig); seen.add(u_sig)
-
         # --- RENDER ---
         fav = favicon_for(r["link"])
         meta = f'{r["source"]} · {r["domain"]}'
