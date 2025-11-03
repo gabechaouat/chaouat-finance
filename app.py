@@ -411,17 +411,30 @@ html, body, * {
 /* Wrap + position for description panel and its arrows */
 .cf-info-wrap { position: relative; }
 
-/* Arrow containers anchored inside the panel */
-.cf-info-wrap .cf-arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 5;
-}
 
 .cf-info-wrap .cf-left  { left: 12px;  }
 .cf-info-wrap .cf-right { right: 12px; }
 
+
+/* Row that is visually pulled onto the description panel */
+.cf-arrowwrap{
+  position: relative;
+  margin-top: -54px;            /* pulls the buttons up over the panel */
+  z-index: 6;                   /* above the panel */
+}
+
+/* Make the arrow buttons blue and compact */
+.cf-arrowwrap [data-testid="stButton"] > button{
+  background: var(--primary) !important;
+  color:#fff !important;
+  border:0 !important;
+  width:42px; height:42px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,123,167,.30);
+  font-weight:700;
+  line-height: 1;
+  padding: 0 !important;
+}
 /* Style the Streamlit buttons inside those containers */
 .cf-info-wrap .cf-arrow [data-testid="stButton"] > button{
   background: var(--primary) !important;
@@ -540,6 +553,20 @@ small, .cf-foot{
   box-shadow: 0 8px 30px rgba(15,23,42,.06);
   margin: 6px 0 24px 0;
 }
+/* Make any bordered container that starts with our big header look like a card */
+div[aria-label="stContainerBorder"]{
+  background: var(--card);
+  border: 1px solid #E2E8F0;
+  border-radius: 18px;
+  padding: 20px 20px 16px 20px;
+  box-shadow: 0 8px 30px rgba(15,23,42,.06);
+}
+
+/* Streamlit gives the bordered container an inner wrapper; tighten spacing */
+div[aria-label="stContainerBorder"] > div:first-child{
+  padding: 0 !important;
+}
+
 
 /* Big headline for the section */
 .cf-h1{
@@ -619,287 +646,289 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Arrows OVER the panel (inside the same wrapper)
-st.markdown('<div class="cf-arrow cf-left">', unsafe_allow_html=True)
-if st.button("◀", key="info_prev", help="Previous"):
-    st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
-    st.rerun()
+# A row that is visually pulled up to sit on the panel
+st.markdown('<div class="cf-arrowwrap">', unsafe_allow_html=True)
+ac1, ac_sp, ac2 = st.columns([0.06, 0.88, 0.06])
+with ac1:
+    if st.button("◀", key="info_prev", help="Previous"):
+        st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
+        st.rerun()
+with ac2:
+    if st.button("▶", key="info_next", help="Next"):
+        st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
+        st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown('<div class="cf-arrow cf-right">', unsafe_allow_html=True)
-if st.button("▶", key="info_next", help="Next"):
-    st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
 # ---- end rotating panel ----
 
+with st.container(border=True):
+    st.markdown('<div class="cf-h1">Stock Analysis Dashboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cf-caption">Data source: Yahoo Finance via yfinance.</div>', unsafe_allow_html=True)
 
-# Stylized dashboard header + wrapper
-st.markdown('<div class="cf-section">', unsafe_allow_html=True)
-st.markdown('<div class="cf-h1">Stock Analysis Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="cf-caption">Data source: Yahoo Finance via yfinance.</div>', unsafe_allow_html=True)
+    # >>> keep ALL the dashboard code (query params, sidebar filters,
+    # date range, fetch, left/right columns, plots, metrics) INSIDE this block
 
 
-# Optional: deep-link into a ticker with ?sym=XXXX
-qp = get_query_params()
+    # Optional: deep-link into a ticker with ?sym=XXXX
+    qp = get_query_params()
 
-if "sym" in qp:
-    _sym_qs = qp["sym"]
-    if isinstance(_sym_qs, str):
-        default_pick = [_sym_qs.upper()]
-    else:  # list-like
-        default_pick = [s.upper() for s in _sym_qs][:4]
-else:
-    default_pick = ["AAPL"]
-# Broad category presets -> underlying S&P sectors
-CATEGORY_PRESETS = {
-    "All": [],
-    "Tech": ["Information Technology", "Communication Services"],
-    "Finance": ["Financials"],
-    "Health": ["Health Care"],
-    "Energy": ["Energy"],
-    "Consumer": ["Consumer Discretionary", "Consumer Staples"],
-    "Industrials": ["Industrials"],
-    "Utilities": ["Utilities"],
-    "Materials": ["Materials"],
-    "Real Estate": ["Real Estate"],
-    # "Sports" is not a GICS sector; this preset approximates sports-related names
-    # via brands/media (Discretionary) + media rights/broadcasters (Comm Services).
-    "Sports (brands & media)": ["Consumer Discretionary", "Communication Services"],
-}
-with st.sidebar:
-    st.header("Settings")
-
-    sp500 = load_sp500_df()
-    sp500["Sector"] = sp500["Sector"].fillna("Unknown")
-    all_symbols = sp500["Symbol"].dropna().unique().tolist()
-    # --- Filters ---
-    st.subheader("Filter universe")
-
-    preset = st.selectbox(
-        "Category preset",
-        list(CATEGORY_PRESETS.keys()),
-        help="Choose a broad category. You can still refine sectors below."
-    )
-
-    sector_options = sorted(sp500["Sector"].unique())
-    pre_selected = CATEGORY_PRESETS[preset] if preset != "All" else []
-    picked_sectors = st.multiselect(
-        "Sectors",
-        sector_options,
-        default=pre_selected,
-        help="Filter the ticker list by S&P 500 sector(s). Leave empty for all."
-    )
-
-    # Filtered symbol universe
-    if picked_sectors:
-        f_syms = (
-            sp500.loc[sp500["Sector"].isin(picked_sectors), "Symbol"]
-            .dropna().unique().tolist()
-        )
+    if "sym" in qp:
+        _sym_qs = qp["sym"]
+        if isinstance(_sym_qs, str):
+            default_pick = [_sym_qs.upper()]
+        else:  # list-like
+            default_pick = [s.upper() for s in _sym_qs][:4]
     else:
-        f_syms = all_symbols
+        default_pick = ["AAPL"]
+    # Broad category presets -> underlying S&P sectors
+    CATEGORY_PRESETS = {
+        "All": [],
+        "Tech": ["Information Technology", "Communication Services"],
+        "Finance": ["Financials"],
+        "Health": ["Health Care"],
+        "Energy": ["Energy"],
+        "Consumer": ["Consumer Discretionary", "Consumer Staples"],
+        "Industrials": ["Industrials"],
+        "Utilities": ["Utilities"],
+        "Materials": ["Materials"],
+        "Real Estate": ["Real Estate"],
+        # "Sports" is not a GICS sector; this preset approximates sports-related names
+        # via brands/media (Discretionary) + media rights/broadcasters (Comm Services).
+        "Sports (brands & media)": ["Consumer Discretionary", "Communication Services"],
+    }
+    with st.sidebar:
+        st.header("Settings")
 
-    st.caption(f"Universe size: {len(f_syms)} tickers")
+        sp500 = load_sp500_df()
+        sp500["Sector"] = sp500["Sector"].fillna("Unknown")
+        all_symbols = sp500["Symbol"].dropna().unique().tolist()
+        # --- Filters ---
+        st.subheader("Filter universe")
 
-    # Keep default selection if still valid
-    default_safe = [s for s in default_pick if s in f_syms] or (
-        ["AAPL"] if "AAPL" in f_syms else f_syms[:1]
-    )
+        preset = st.selectbox(
+            "Category preset",
+            list(CATEGORY_PRESETS.keys()),
+            help="Choose a broad category. You can still refine sectors below."
+        )
 
-    pick = st.multiselect(
-        "Select up to 4 tickers (type to search)",
-        options=sorted(f_syms),
-        default=default_safe,
-        max_selections=4,
-        help="Start typing (e.g., NVDA, MSFT)."
-    )
+        sector_options = sorted(sp500["Sector"].unique())
+        pre_selected = CATEGORY_PRESETS[preset] if preset != "All" else []
+        picked_sectors = st.multiselect(
+            "Sectors",
+            sector_options,
+            default=pre_selected,
+            help="Filter the ticker list by S&P 500 sector(s). Leave empty for all."
+        )
 
-    # Optional free-text extra symbols
-    custom = st.text_input("Optional extra symbols (comma-separated)").strip()
-    if custom:
-        extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
-        pick = (pick + extra)[:4]  # enforce max 4 total
+        # Filtered symbol universe
+        if picked_sectors:
+            f_syms = (
+                sp500.loc[sp500["Sector"].isin(picked_sectors), "Symbol"]
+                .dropna().unique().tolist()
+            )
+        else:
+            f_syms = all_symbols
 
-    # Core chart controls — always defined (not under `if custom`)
-    years = st.slider("History (years)", 1, 10, 5)
-    vol_window = st.slider("Rolling volatility window (trading days)", 5, 252, 20)
-    use_log_returns = st.toggle("Use log returns (recommended)", True)
+        st.caption(f"Universe size: {len(f_syms)} tickers")
 
-    st.divider()
-    st.subheader("Chart overlays")
-    chart_overlays = st.multiselect(
-        "Select overlays",
-        ["Price", "Rolling Volatility", "SMA 50", "SMA 200", "RSI (14)", "Drawdown"],
-        default=["Price"],
-        help="RSI and Drawdown are plotted on a secondary axis."
-    )
+        # Keep default selection if still valid
+        default_safe = [s for s in default_pick if s in f_syms] or (
+            ["AAPL"] if "AAPL" in f_syms else f_syms[:1]
+        )
+
+        pick = st.multiselect(
+            "Select up to 4 tickers (type to search)",
+            options=sorted(f_syms),
+            default=default_safe,
+            max_selections=4,
+            help="Start typing (e.g., NVDA, MSFT)."
+        )
+
+        # Optional free-text extra symbols
+        custom = st.text_input("Optional extra symbols (comma-separated)").strip()
+        if custom:
+            extra = [x.strip().upper() for x in custom.split(",") if x.strip()]
+            pick = (pick + extra)[:4]  # enforce max 4 total
+
+        # Core chart controls — always defined (not under `if custom`)
+        years = st.slider("History (years)", 1, 10, 5)
+        vol_window = st.slider("Rolling volatility window (trading days)", 5, 252, 20)
+        use_log_returns = st.toggle("Use log returns (recommended)", True)
+
+        st.divider()
+        st.subheader("Chart overlays")
+        chart_overlays = st.multiselect(
+            "Select overlays",
+            ["Price", "Rolling Volatility", "SMA 50", "SMA 200", "RSI (14)", "Drawdown"],
+            default=["Price"],
+            help="RSI and Drawdown are plotted on a secondary axis."
+        )
 
 
-    st.divider()
-    st.subheader("Cross-section scan")
-    lookback_days = st.slider(
-        "Lookback (trading days) for scan",
-        20, 252, 60,
-        key="scan_lookback",
-        help="Window used to rank highest/lowest volatility across the S&P 500."
-    )
-    run_scan = st.checkbox(
-        "Show Top/Bottom lists",
-        value=True,
-        key="scan_toggle"
-    )
+        st.divider()
+        st.subheader("Cross-section scan")
+        lookback_days = st.slider(
+            "Lookback (trading days) for scan",
+            20, 252, 60,
+            key="scan_lookback",
+            help="Window used to rank highest/lowest volatility across the S&P 500."
+        )
+        run_scan = st.checkbox(
+            "Show Top/Bottom lists",
+            value=True,
+            key="scan_toggle"
+        )
 
-    st.divider()
-    ttl_minutes = st.number_input("Data cache TTL (minutes)", min_value=1, value=60)
-    refresh = st.button("Force refresh now")
+        st.divider()
+        ttl_minutes = st.number_input("Data cache TTL (minutes)", min_value=1, value=60)
+        refresh = st.button("Force refresh now")
 
 
 
-# date range AFTER sidebar variables exist
-start = dt.date.today() - dt.timedelta(days=365 * years)
-end = dt.date.today()
+    # date range AFTER sidebar variables exist
+    start = dt.date.today() - dt.timedelta(days=365 * years)
+    end = dt.date.today()
 
-# STEP 3 — fetch data for all selected tickers
-if refresh:
-    fetch_history_multi.clear()
+    # STEP 3 — fetch data for all selected tickers
+    if refresh:
+        fetch_history_multi.clear()
 
-prices_all = fetch_history_multi(pick, start, end)
-if prices_all.empty:
+    prices_all = fetch_history_multi(pick, start, end)
+    if prices_all.empty:
     st.error("No price data returned. Try different symbols.")
-    st.stop()
+        st.stop()
 
-# === CHART + COMPARISON STATS IN ONE ROW ===
-left, right = st.columns([2.5, 1], gap="large")
+    # === CHART + COMPARISON STATS IN ONE ROW ===
+    left, right = st.columns([2.5, 1], gap="large")
 
-with left:
-    # Header: show logo + full name ONLY when there is a single ticker.
-    # For multiple tickers, show only the tickers string (no logo, no long name).
-    if len(pick) == 1:
-        sym = pick[0]
-        company_name, company_logo = get_company_meta(sym)
+    with left:
+        # Header: show logo + full name ONLY when there is a single ticker.
+        # For multiple tickers, show only the tickers string (no logo, no long name).
+        if len(pick) == 1:
+            sym = pick[0]
+            company_name, company_logo = get_company_meta(sym)
 
-        # Build one HTML block to avoid nested triple-quote pitfalls
-        logo_html = f'<img src="{company_logo}" alt="{sym} logo" class="cf-logo"/>' if company_logo else ""
-        name_html = f' — {company_name}' if company_name else ""
+            # Build one HTML block to avoid nested triple-quote pitfalls
+            logo_html = f'<img src="{company_logo}" alt="{sym} logo" class="cf-logo"/>' if company_logo else ""
+            name_html = f' — {company_name}' if company_name else ""
 
-        st.markdown(
-            f"""
-            <div class="cf-stockline">
-              {logo_html}
-              <div class="cf-stocktext"><b>{sym}</b>{name_html}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"""
-            <div class="cf-stockline">
-              <div class="cf-stocktext"><b>{' / '.join(pick)}</b></div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(
+                f"""
+                <div class="cf-stockline">
+                  {logo_html}
+                  <div class="cf-stocktext"><b>{sym}</b>{name_html}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"""
+                <div class="cf-stockline">
+                  <div class="cf-stocktext"><b>{' / '.join(pick)}</b></div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 
-    # ---- build overlays figure (uses the sidebar multiselect `chart_overlays`)
-    ind_map = compute_indicators(prices_all)
+        # ---- build overlays figure (uses the sidebar multiselect `chart_overlays`)
+        ind_map = compute_indicators(prices_all)
 
-    vol_df = None
-    if "Rolling Volatility" in chart_overlays:
-        vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+        vol_df = None
+        if "Rolling Volatility" in chart_overlays:
+            vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
 
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # Price
-    if "Price" in chart_overlays:
-        for tkr, g in prices_all.sort_values("Date").groupby("Ticker"):
-            fig.add_trace(
-                go.Scatter(x=g["Date"], y=g["Close"], name=f"{tkr} Price", mode="lines"),
-                secondary_y=False
+        # Price
+        if "Price" in chart_overlays:
+            for tkr, g in prices_all.sort_values("Date").groupby("Ticker"):
+                fig.add_trace(
+                    go.Scatter(x=g["Date"], y=g["Close"], name=f"{tkr} Price", mode="lines"),
+                    secondary_y=False
+                    )
+
+        # SMA overlays
+        if "SMA 50" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["SMA50"], name=f"{tkr} SMA50", mode="lines", line=dict(dash="dot")),
+                    secondary_y=False
+                )
+        if "SMA 200" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["SMA200"], name=f"{tkr} SMA200", mode="lines", line=dict(dash="dash")),
+                    secondary_y=False
                 )
 
-    # SMA overlays
-    if "SMA 50" in chart_overlays:
-        for tkr, ind in ind_map.items():
-            fig.add_trace(
-                go.Scatter(x=ind.index, y=ind["SMA50"], name=f"{tkr} SMA50", mode="lines", line=dict(dash="dot")),
-                secondary_y=False
-            )
-    if "SMA 200" in chart_overlays:
-        for tkr, ind in ind_map.items():
-            fig.add_trace(
-                go.Scatter(x=ind.index, y=ind["SMA200"], name=f"{tkr} SMA200", mode="lines", line=dict(dash="dash")),
-                secondary_y=False
-            )
+        # Rolling Vol (annualized)
+        if vol_df is not None and not vol_df.empty:
+            for tkr, g in vol_df.sort_values("Date").groupby("Ticker"):
+                fig.add_trace(
+                    go.Scatter(x=g["Date"], y=g["AnnVol"], name=f"{tkr} Ann. Vol", mode="lines"),
+                    secondary_y=False
+                )
 
-    # Rolling Vol (annualized)
-    if vol_df is not None and not vol_df.empty:
-        for tkr, g in vol_df.sort_values("Date").groupby("Ticker"):
-            fig.add_trace(
-                go.Scatter(x=g["Date"], y=g["AnnVol"], name=f"{tkr} Ann. Vol", mode="lines"),
-                secondary_y=False
-            )
+        # RSI (secondary axis)
+        if "RSI (14)" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["RSI14"], name=f"{tkr} RSI(14)", mode="lines"),
+                    secondary_y=True
+                )
 
-    # RSI (secondary axis)
-    if "RSI (14)" in chart_overlays:
-        for tkr, ind in ind_map.items():
-            fig.add_trace(
-                go.Scatter(x=ind.index, y=ind["RSI14"], name=f"{tkr} RSI(14)", mode="lines"),
-                secondary_y=True
-            )
+        # Drawdown (secondary axis)
+        if "Drawdown" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["Drawdown"], name=f"{tkr} Drawdown", mode="lines", fill="tozeroy"),
+                    secondary_y=True
+                )
 
-    # Drawdown (secondary axis)
-    if "Drawdown" in chart_overlays:
-        for tkr, ind in ind_map.items():
-            fig.add_trace(
-                go.Scatter(x=ind.index, y=ind["Drawdown"], name=f"{tkr} Drawdown", mode="lines", fill="tozeroy"),
-                secondary_y=True
-            )
+        fig.update_layout(
+            height=460,
+            margin=dict(l=10, r=10, t=30, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
+        )
+        fig.update_xaxes(title_text="Date")
+        fig.update_yaxes(title_text="Price / Volatility", secondary_y=False)
+        fig.update_yaxes(title_text="RSI / Drawdown", secondary_y=True)
 
-    fig.update_layout(
-        height=460,
-        margin=dict(l=10, r=10, t=30, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
-    )
-    fig.update_xaxes(title_text="Date")
-    fig.update_yaxes(title_text="Price / Volatility", secondary_y=False)
-    fig.update_yaxes(title_text="RSI / Drawdown", secondary_y=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.plotly_chart(fig, use_container_width=True)
+    with right:
+        # ---------- build the data used by either view ----------
+        # Latest price per ticker
+        last_prices = (
+            prices_all.sort_values("Date")
+            .groupby("Ticker")
+            .tail(1)[["Ticker", "Close"]]
+            .set_index("Ticker")["Close"]
+        )
 
-with right:
-    # ---------- build the data used by either view ----------
-    # Latest price per ticker
-    last_prices = (
-        prices_all.sort_values("Date")
-        .groupby("Ticker")
-        .tail(1)[["Ticker", "Close"]]
-        .set_index("Ticker")["Close"]
-    )
+        # YTD return
+        ytd_start = dt.date(dt.date.today().year, 1, 1)
+        ytd_prices = prices_all[prices_all["Date"] >= pd.to_datetime(ytd_start)].copy()
+        ytd_first = (
+            ytd_prices.sort_values("Date")
+            .groupby("Ticker")
+            .head(1)
+            .set_index("Ticker")["Close"]
+        )
+        ytd_ret = ((last_prices / ytd_first) - 1).replace([np.inf, -np.inf], np.nan)
 
-    # YTD return
-    ytd_start = dt.date(dt.date.today().year, 1, 1)
-    ytd_prices = prices_all[prices_all["Date"] >= pd.to_datetime(ytd_start)].copy()
-    ytd_first = (
-        ytd_prices.sort_values("Date")
-        .groupby("Ticker")
-        .head(1)
-        .set_index("Ticker")["Close"]
-    )
-    ytd_ret = ((last_prices / ytd_first) - 1).replace([np.inf, -np.inf], np.nan)
+        # Latest annualized vol using the chosen window
+        vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+        last_vol = (
+            vol_df.sort_values("Date")
+            .groupby("Ticker")
+            .tail(1)
+            .set_index("Ticker")["AnnVol"]
+        )
 
-    # Latest annualized vol using the chosen window
-    vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
-    last_vol = (
-        vol_df.sort_values("Date")
-        .groupby("Ticker")
-        .tail(1)
-        .set_index("Ticker")["AnnVol"]
-    )
-
-    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
 
     if len(pick) >= 2:
         # ---------- COMPARISON (2+ tickers) ----------
@@ -1010,7 +1039,7 @@ with right:
 
 
     st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)  # close .cf-section
+
 
 
 # === TOP / BOTTOM VOLATILITY ===
@@ -1190,6 +1219,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
