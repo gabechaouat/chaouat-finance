@@ -408,12 +408,22 @@ html, body, * {
   margin-top: 6px;
   opacity: .95;
 }
-/* Arrow buttons that visually sit on the info panel */
-.cf-info-wrap{ position: relative; }
-.cf-arrowwrap{
-  margin-top:-900px;   /* pulls buttons up to overlap the panel */
+/* Wrap + position for description panel and its arrows */
+.cf-info-wrap { position: relative; }
+
+/* Arrow containers anchored inside the panel */
+.cf-info-wrap .cf-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
 }
-.cf-arrowwrap [data-testid="stButton"] > button{
+
+.cf-info-wrap .cf-left  { left: 12px;  }
+.cf-info-wrap .cf-right { right: 12px; }
+
+/* Style the Streamlit buttons inside those containers */
+.cf-info-wrap .cf-arrow [data-testid="stButton"] > button{
   background: var(--primary) !important;
   color:#fff !important;
   border:0 !important;
@@ -421,6 +431,8 @@ html, body, * {
   border-radius:10px;
   box-shadow:0 2px 6px rgba(0,123,167,.30);
   font-weight:700;
+  line-height: 1;
+  padding: 0 !important;
 }
 
 /* Buttons */
@@ -519,6 +531,31 @@ small, .cf-foot{
 [data-testid="stAppViewContainer"] > .main {
   padding-top: 54px; /* header 44px + 10px breathing room */
 }
+/* Pretty section wrapper for the dashboard */
+.cf-section{
+  background: var(--card);
+  border: 1px solid #E2E8F0;
+  border-radius: 18px;
+  padding: 22px 22px;
+  box-shadow: 0 8px 30px rgba(15,23,42,.06);
+  margin: 6px 0 24px 0;
+}
+
+/* Big headline for the section */
+.cf-h1{
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  color: #0F172A;
+  margin: 0 0 4px 0;
+}
+.cf-caption{
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+
+/* Gentle card styling for the right-side metrics panel (you already had .metric-card; keeping it consistent) */
 </style>
 """, unsafe_allow_html=True)
 
@@ -582,24 +619,26 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Arrows row; pulled up via CSS to sit on the panel
-st.markdown('<div class="cf-arrowwrap">', unsafe_allow_html=True)
-ac1, ac_sp, ac2 = st.columns([0.06, 0.88, 0.06])
-with ac1:
-    if st.button("◀", key="info_prev", help="Previous"):
-        st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
-        st.rerun()
-with ac2:
-    if st.button("▶", key="info_next", help="Next"):
-        st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
-        st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)  # close cf-arrowwrap
-st.markdown('</div>', unsafe_allow_html=True)  # close cf-info-wrap
+# Arrows OVER the panel (inside the same wrapper)
+st.markdown('<div class="cf-arrow cf-left">', unsafe_allow_html=True)
+if st.button("◀", key="info_prev", help="Previous"):
+    st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
+    st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="cf-arrow cf-right">', unsafe_allow_html=True)
+if st.button("▶", key="info_next", help="Next"):
+    st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
+    st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 # ---- end rotating panel ----
 
 
-st.title("Stock Analysis Dashboard")
-st.caption("Data source: Yahoo Finance via yfinance.")
+# Stylized dashboard header + wrapper
+st.markdown('<div class="cf-section">', unsafe_allow_html=True)
+st.markdown('<div class="cf-h1">Stock Analysis Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="cf-caption">Data source: Yahoo Finance via yfinance.</div>', unsafe_allow_html=True)
+
 
 # Optional: deep-link into a ticker with ?sym=XXXX
 qp = get_query_params()
@@ -971,6 +1010,7 @@ with right:
 
 
     st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)  # close .cf-section
 
 
 # === TOP / BOTTOM VOLATILITY ===
@@ -1150,6 +1190,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
