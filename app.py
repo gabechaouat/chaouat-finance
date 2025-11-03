@@ -408,6 +408,20 @@ html, body, * {
   margin-top: 6px;
   opacity: .95;
 }
+/* Arrow buttons that visually sit on the info panel */
+.cf-info-wrap{ position: relative; }
+.cf-arrowwrap{
+  margin-top:-46px;   /* pulls buttons up to overlap the panel */
+}
+.cf-arrowwrap [data-testid="stButton"] > button{
+  background: var(--primary) !important;
+  color:#fff !important;
+  border:0 !important;
+  width:42px; height:42px;
+  border-radius:10px;
+  box-shadow:0 2px 6px rgba(0,123,167,.30);
+  font-weight:700;
+}
 
 /* Buttons */
 .stButton>button, .stDownloadButton>button{
@@ -517,7 +531,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 # ---- Rotating single info panel (auto every 10s; manual arrows) ----
 try:
-    from streamlit_autorefresh import st_autorefresh   # built-in on Streamlit Cloud
+    from streamlit_autorefresh import st_autorefresh
 except Exception:
     st_autorefresh = None
 
@@ -547,7 +561,7 @@ if "panel_idx" not in st.session_state:
 if "panel_refresh_count" not in st.session_state:
     st.session_state.panel_refresh_count = -1
 
-# Auto-advance every 10s (if the helper is available)
+# Auto-advance every 10 seconds
 if st_autorefresh is not None:
     count = st_autorefresh(interval=10_000, key="rotating_info_panel")
     if count != st.session_state.panel_refresh_count:
@@ -556,7 +570,10 @@ if st_autorefresh is not None:
 
 title, text = PANELS[st.session_state.panel_idx]
 
-# Render the panel (keeps your exact cf-info look)
+# Wrapper so arrows can overlap the panel
+st.markdown('<div class="cf-info-wrap">', unsafe_allow_html=True)
+
+# The panel (same visual style you already use)
 st.markdown(
     f"""
     <div class="cf-info">
@@ -566,17 +583,21 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Arrow controls (left/right). Small, unobtrusive; panel stays identical.
-c_left, c_sp, c_right = st.columns([0.06, 0.88, 0.06])
-with c_left:
-    if st.button("◀", help="Previous"):
+# Arrows row; pulled up via CSS to sit on the panel
+st.markdown('<div class="cf-arrowwrap">', unsafe_allow_html=True)
+ac1, ac_sp, ac2 = st.columns([0.06, 0.88, 0.06])
+with ac1:
+    if st.button("◀", key="info_prev", help="Previous"):
         st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
-        st.experimental_rerun()
-with c_right:
-    if st.button("▶", help="Next"):
+        st.rerun()
+with ac2:
+    if st.button("▶", key="info_next", help="Next"):
         st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
-        st.experimental_rerun()
+        st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)  # close cf-arrowwrap
+st.markdown('</div>', unsafe_allow_html=True)  # close cf-info-wrap
 # ---- end rotating panel ----
+
 
 st.title("Stock Analysis Dashboard")
 st.caption("Data source: Yahoo Finance via yfinance.")
@@ -1115,6 +1136,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
