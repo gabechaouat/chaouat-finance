@@ -631,71 +631,71 @@ with left:
         )
 
 
-        # ---- build overlays figure (uses the sidebar multiselect `chart_overlays`)
-        ind_map = compute_indicators(prices_all)
+    # ---- build overlays figure (uses the sidebar multiselect `chart_overlays`)
+    ind_map = compute_indicators(prices_all)
 
-        vol_df = None
-        if "Rolling Volatility" in chart_overlays:
-            vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+    vol_df = None
+    if "Rolling Volatility" in chart_overlays:
+        vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
 
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-        # Price
-        if "Price" in chart_overlays:
-            for tkr, g in prices_all.sort_values("Date").groupby("Ticker"):
-                fig.add_trace(
-                    go.Scatter(x=g["Date"], y=g["Close"], name=f"{tkr} Price", mode="lines"),
-                    secondary_y=False
+    # Price
+    if "Price" in chart_overlays:
+        for tkr, g in prices_all.sort_values("Date").groupby("Ticker"):
+            fig.add_trace(
+                go.Scatter(x=g["Date"], y=g["Close"], name=f"{tkr} Price", mode="lines"),
+                secondary_y=False
                 )
 
-        # SMA overlays
-        if "SMA 50" in chart_overlays:
-            for tkr, ind in ind_map.items():
-                fig.add_trace(
-                    go.Scatter(x=ind.index, y=ind["SMA50"], name=f"{tkr} SMA50", mode="lines", line=dict(dash="dot")),
-                    secondary_y=False
-                )
-        if "SMA 200" in chart_overlays:
-            for tkr, ind in ind_map.items():
-                fig.add_trace(
-                    go.Scatter(x=ind.index, y=ind["SMA200"], name=f"{tkr} SMA200", mode="lines", line=dict(dash="dash")),
-                    secondary_y=False
-                )
+    # SMA overlays
+    if "SMA 50" in chart_overlays:
+        for tkr, ind in ind_map.items():
+            fig.add_trace(
+                go.Scatter(x=ind.index, y=ind["SMA50"], name=f"{tkr} SMA50", mode="lines", line=dict(dash="dot")),
+                secondary_y=False
+            )
+    if "SMA 200" in chart_overlays:
+        for tkr, ind in ind_map.items():
+            fig.add_trace(
+                go.Scatter(x=ind.index, y=ind["SMA200"], name=f"{tkr} SMA200", mode="lines", line=dict(dash="dash")),
+                secondary_y=False
+            )
 
-        # Rolling Vol (annualized)
-        if vol_df is not None and not vol_df.empty:
-            for tkr, g in vol_df.sort_values("Date").groupby("Ticker"):
-                fig.add_trace(
-                    go.Scatter(x=g["Date"], y=g["AnnVol"], name=f"{tkr} Ann. Vol", mode="lines"),
-                    secondary_y=False
-                )
+    # Rolling Vol (annualized)
+    if vol_df is not None and not vol_df.empty:
+        for tkr, g in vol_df.sort_values("Date").groupby("Ticker"):
+            fig.add_trace(
+                go.Scatter(x=g["Date"], y=g["AnnVol"], name=f"{tkr} Ann. Vol", mode="lines"),
+                secondary_y=False
+            )
 
-        # RSI (secondary axis)
-        if "RSI (14)" in chart_overlays:
-            for tkr, ind in ind_map.items():
-                fig.add_trace(
-                    go.Scatter(x=ind.index, y=ind["RSI14"], name=f"{tkr} RSI(14)", mode="lines"),
-                    secondary_y=True
-                )
+    # RSI (secondary axis)
+    if "RSI (14)" in chart_overlays:
+        for tkr, ind in ind_map.items():
+            fig.add_trace(
+                go.Scatter(x=ind.index, y=ind["RSI14"], name=f"{tkr} RSI(14)", mode="lines"),
+                secondary_y=True
+            )
 
-        # Drawdown (secondary axis)
-        if "Drawdown" in chart_overlays:
-            for tkr, ind in ind_map.items():
-                fig.add_trace(
-                    go.Scatter(x=ind.index, y=ind["Drawdown"], name=f"{tkr} Drawdown", mode="lines", fill="tozeroy"),
-                    secondary_y=True
-                )
+    # Drawdown (secondary axis)
+    if "Drawdown" in chart_overlays:
+        for tkr, ind in ind_map.items():
+            fig.add_trace(
+                go.Scatter(x=ind.index, y=ind["Drawdown"], name=f"{tkr} Drawdown", mode="lines", fill="tozeroy"),
+                secondary_y=True
+            )
 
-        fig.update_layout(
-            height=460,
-            margin=dict(l=10, r=10, t=30, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
-        )
-        fig.update_xaxes(title_text="Date")
-        fig.update_yaxes(title_text="Price / Volatility", secondary_y=False)
-        fig.update_yaxes(title_text="RSI / Drawdown", secondary_y=True)
+    fig.update_layout(
+        height=460,
+        margin=dict(l=10, r=10, t=30, b=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
+    )
+    fig.update_xaxes(title_text="Date")
+    fig.update_yaxes(title_text="Price / Volatility", secondary_y=False)
+    fig.update_yaxes(title_text="RSI / Drawdown", secondary_y=True)
 
-        st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 with right:
     # ---------- build the data used by either view ----------
@@ -777,17 +777,18 @@ with right:
         lp = float(last_prices.get(sym, np.nan)) if sym in last_prices.index else float("nan")
         lv = float(last_vol.get(sym, np.nan) * 100) if sym in last_vol.index else float("nan")
         yr = float(ytd_ret.get(sym, np.nan) * 100) if sym in ytd_ret.index else float("nan")
-        # Indicators for single symbol
+
+        # Build indicators for single symbol (needed in this scope)
+        ind_map = compute_indicators(prices_all)
         ind = ind_map.get(sym)
+
         if ind is not None and not ind.empty:
-            last = ind.iloc[-1]
-            # 52-week stats (use last 252 trading days)
             last_252 = ind.tail(252)
             high_52w = last_252["Close"].max()
             low_52w  = last_252["Close"].min()
-            max_dd   = float(ind["Drawdown"].min())
+            max_dd   = float(ind["Drawdown"].min())  # fraction, e.g. -0.34
 
-            # Sharpe over last 1y (simple, not risk-free adjusted)
+            # Sharpe over last 1y (simple)
             ret_1y = last_252["Return"].dropna()
             sharpe_1y = float((ret_1y.mean() * np.sqrt(252)) / ret_1y.std()) if ret_1y.std() > 0 else np.nan
 
@@ -799,37 +800,41 @@ with right:
                 beta = float(ret_1y.loc[common].cov(spy.loc[common]) / spy.loc[common].var()) if spy.loc[common].var() > 0 else np.nan
             except Exception:
                 beta = np.nan
+
+            rsi_last   = ind["RSI14"].iloc[-1]
+            sma50_last = ind["SMA50"].iloc[-1]
+            sma200_last= ind["SMA200"].iloc[-1]
         else:
             high_52w = low_52w = max_dd = sharpe_1y = beta = np.nan
+            rsi_last = sma50_last = sma200_last = np.nan
 
+        # Row 1
         row1 = st.columns(3)
-    if not np.isnan(lp):
-        row1[0].metric("Last Price ($)", f"{lp:.2f}")
-    if not np.isnan(lv):
-        row1[1].metric(f"Vol {vol_window}d (ann)", f"{lv:.2f}%")
-    if not np.isnan(yr):
-        row1[2].metric("YTD Return", f"{yr:.2f}%")
+        if not np.isnan(lp):
+            row1[0].metric("Last Price ($)", f"{lp:.2f}")
+        if not np.isnan(lv):
+            row1[1].metric(f"Vol {vol_window}d (ann)", f"{lv:.2f}%")
+        if not np.isnan(yr):
+            row1[2].metric("YTD Return", f"{yr:.2f}%")
 
-    row2 = st.columns(3)
-    if not np.isnan(high_52w):
-        row2[0].metric("52-Week High", f"{high_52w:.2f}")
-    if not np.isnan(low_52w):
-        row2[1].metric("52-Week Low", f"{low_52w:.2f}")
-    if not np.isnan(max_dd):
-        row2[2].metric("Max Drawdown", f"{max_dd*100:.2f}%")
+        # Row 2
+        row2 = st.columns(3)
+        if not np.isnan(high_52w):
+            row2[0].metric("52-Week High", f"{high_52w:.2f}")
+        if not np.isnan(low_52w):
+            row2[1].metric("52-Week Low", f"{low_52w:.2f}")
+        if not np.isnan(max_dd):
+            row2[2].metric("Max Drawdown", f"{max_dd*100:.2f}%")
 
-    row3 = st.columns(3)
-    # latest RSI and SMAs from the indicator table
-    rsi_last = ind_map.get(sym)["RSI14"].iloc[-1] if ind_map.get(sym) is not None else np.nan
-    sma50_last = ind_map.get(sym)["SMA50"].iloc[-1] if ind_map.get(sym) is not None else np.nan
-    sma200_last = ind_map.get(sym)["SMA200"].iloc[-1] if ind_map.get(sym) is not None else np.nan
+        # Row 3
+        row3 = st.columns(3)
+        if not np.isnan(rsi_last):
+            row3[0].metric("RSI (14)", f"{rsi_last:.1f}")
+        if not np.isnan(sharpe_1y):
+            row3[1].metric("Sharpe (1y)", f"{sharpe_1y:.2f}")
+        if not np.isnan(beta):
+            row3[2].metric("Beta vs S&P 500", f"{beta:.2f}")
 
-    if not np.isnan(rsi_last):
-        row3[0].metric("RSI (14)", f"{rsi_last:.1f}")
-    if not np.isnan(sharpe_1y):
-        row3[1].metric("Sharpe (1y)", f"{sharpe_1y:.2f}")
-    if not np.isnan(beta):
-        row3[2].metric("Beta vs S&P 500", f"{beta:.2f}")
 
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1049,6 +1054,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
