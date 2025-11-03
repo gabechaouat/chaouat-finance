@@ -3,4 +3,7 @@ yfinance
 pandas
 numpy
 plotly
+feedparser==6.0.11
+python-dateutil>=2.8.2
+
 
