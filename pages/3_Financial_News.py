@@ -306,6 +306,21 @@ df = df[(df["published"].isna()) | (df["published"] >= cutoff)]
 if q:
     q_low = q.lower()
     df = df[df["title"].str.lower().str.contains(q_low, na=False)]
+# ---------- Pagination (5 headlines max on screen) ----------
+PAGE_SIZE = 5
+if "news_page" not in st.session_state:
+    st.session_state.news_page = 1
+
+total_items = len(df)
+total_pages = max(1, (total_items + PAGE_SIZE - 1) // PAGE_SIZE)
+
+# Clamp current page into valid range (handles filter changes gracefully)
+st.session_state.news_page = max(1, min(st.session_state.news_page, total_pages))
+
+start_idx = (st.session_state.news_page - 1) * PAGE_SIZE
+end_idx = start_idx + PAGE_SIZE
+df_page = df.iloc[start_idx:end_idx]
+
 
 # ---------- Render ----------
 st.markdown('<div class="cf-section">', unsafe_allow_html=True)
@@ -315,7 +330,7 @@ with left:
     st.subheader("Latest headlines")
     # --- DEDUPE STATE ---
     seen = set()
-    for _, r in df.iterrows():
+    for _, r in df_page.iterrows():
         # --- DEDUPE CHECK ---
         t_sig = normalize_title(r["title"])
         u_sig = normalize_url(r["link"])
@@ -342,6 +357,21 @@ with left:
             """,
             unsafe_allow_html=True
         )
+        # Pager controls (never show more than 5 at a time)
+    cp, ci, cn = st.columns([0.18, 0.64, 0.18])
+    with cp:
+        if st.button("◀ Previous", disabled=(st.session_state.news_page <= 1), key="news_prev"):
+            st.session_state.news_page -= 1
+            st.rerun()
+    with ci:
+        st.markdown(
+            f"<div style='text-align:center;color:#64748B;'>Page {st.session_state.news_page} / {total_pages}</div>",
+            unsafe_allow_html=True
+        )
+    with cn:
+        if st.button("Next ▶", disabled=(st.session_state.news_page >= total_pages), key="news_next"):
+            st.session_state.news_page += 1
+            st.rerun()
 
 
 with right:
