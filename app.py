@@ -411,7 +411,7 @@ html, body, * {
 /* Arrow buttons that visually sit on the info panel */
 .cf-info-wrap{ position: relative; }
 .cf-arrowwrap{
-  margin-top:-200px;   /* pulls buttons up to overlap the panel */
+  margin-top:-500px;   /* pulls buttons up to overlap the panel */
 }
 .cf-arrowwrap [data-testid="stButton"] > button{
   background: var(--primary) !important;
@@ -1135,6 +1135,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
