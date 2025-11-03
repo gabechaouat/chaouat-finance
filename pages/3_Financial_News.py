@@ -100,6 +100,12 @@ SOURCES = {
     # CNBC Top News (flux principal)
     "CNBC – Top News": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
 }
+# ---------- Default tickers for earnings (broad, so we rarely get an empty table) ----------
+DEFAULT_EARN_TICKERS = [
+    "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","JPM","XOM","UNH",
+    "LLY","AVGO","V","JNJ","PG","HD","MA","BAC","CVX","COST",
+    "MRK","PEP","WMT","ABBV","KO","ADBE","NFLX","ORCL","AMD","TMO"
+]
 
 # ---------- Helpers ----------
 def domain_from_url(url: str) -> str:
@@ -277,16 +283,28 @@ with st.sidebar:
     refresh = st.button("Refresh now")
     st.divider()
     st.header("Earnings")
+
     tickers_in = st.text_input(
         "Tickers (comma-separated)",
         value="AAPL, MSFT, NVDA",
-        help="Add any US tickers you want to check."
+        help="Leave empty to use a broad default list."
     ).strip()
-    sort_choice = st.selectbox(
+
+    earn_show = st.checkbox("Show earnings", value=True)
+
+    earn_sort = st.selectbox(
         "Sort by",
-        ["Latest first", "Biggest beat ($)", "Biggest beat (%)", "Biggest miss ($)", "Biggest miss (%)"]
+        ["Latest first", "Biggest beat ($)", "Biggest beat (%)", "Biggest miss ($)", "Biggest miss (%)"],
+        index=0
     )
-    show_earnings = st.checkbox("Show earnings snapshot", value=True)
+
+    earn_filter = st.radio(
+        "Filter",
+        ["All", "Beats only", "Misses only"],
+        index=0,
+        horizontal=True
+    )
+
 
 
 if refresh:
@@ -342,7 +360,7 @@ with left:
         meta = f'{r["source"]} · {r["domain"]}'
         when = time_ago(r["published"])
         st.markdown(
-            f"""
+        f"""
             <div class="news-card">
               <div class="news-title"><a href="{r['link']}" target="_blank" rel="noopener noreferrer">{r['title']}</a></div>
               <div class="news-meta">
@@ -424,6 +442,93 @@ if show_earnings and tickers_in:
         )
         st.caption("Beat = Actual EPS − Estimate EPS. Positive = beat; negative = miss.")
         st.markdown('</div>', unsafe_allow_html=True)
+        # ---------- Earnings section (own 5-item pager) ----------
+if earn_show:
+    # Resolve universe
+    if tickers_in:
+        syms = [s.strip().upper() for s in tickers_in.split(",") if s.strip()]
+    else:
+        syms = DEFAULT_EARN_TICKERS
 
+    earn = get_latest_earnings_df(syms)
 
+    # Optional filter: beats/misses
+    if not earn.empty and earn_filter != "All":
+        if earn_filter == "Beats only":
+            earn = earn[pd.to_numeric(earn["Beat ($)"], errors="coerce") > 0]
+        elif earn_filter == "Misses only":
+            earn = earn[pd.to_numeric(earn["Beat ($)"], errors="coerce") < 0]
+
+    # Sorting
+    if not earn.empty:
+        if earn_sort == "Latest first":
+            earn = earn.sort_values("Earnings date", ascending=False, na_position="last")
+        elif earn_sort == "Biggest beat ($)":
+            earn = earn.sort_values("Beat ($)", ascending=False, na_position="last")
+        elif earn_sort == "Biggest beat (%)":
+            earn = earn.sort_values("Beat (%)", ascending=False, na_position="last")
+        elif earn_sort == "Biggest miss ($)":
+            earn = earn.sort_values("Beat ($)", ascending=True, na_position="last")
+        elif earn_sort == "Biggest miss (%)":
+            earn = earn.sort_values("Beat (%)", ascending=True, na_position="last")
+
+    # Render panel
+    st.markdown('<div class="cf-section">', unsafe_allow_html=True)
+    st.subheader("Earnings")
+
+    if earn.empty:
+        st.info("No earnings data found for the current settings.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        # Pagination: 5 rows per screen
+        E_PAGE_SIZE = 5
+        if "earn_page" not in st.session_state:
+            st.session_state.earn_page = 1
+
+        total_e = len(earn)
+        total_e_pages = max(1, (total_e + E_PAGE_SIZE - 1) // E_PAGE_SIZE)
+        st.session_state.earn_page = max(1, min(st.session_state.earn_page, total_e_pages))
+
+        e_start = (st.session_state.earn_page - 1) * E_PAGE_SIZE
+        e_end = e_start + E_PAGE_SIZE
+        earn_page = earn.iloc[e_start:e_end].copy()
+
+        # Round neat display
+        for c in ["EPS estimate", "EPS actual", "Beat ($)", "Beat (%)"]:
+            if c in earn_page.columns:
+                earn_page[c] = pd.to_numeric(earn_page[c], errors="coerce").round(2)
+
+        # Show as a compact table (max 5 rows on screen)
+        st.dataframe(
+            earn_page,
+            use_container_width=True,
+            hide_index=True,
+            height=220,  # fits ~5 rows; you can adjust
+            column_config={
+                "Earnings date": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                "EPS estimate": st.column_config.NumberColumn(format="%.2f"),
+                "EPS actual":   st.column_config.NumberColumn(format="%.2f"),
+                "Beat ($)":     st.column_config.NumberColumn(format="%.2f"),
+                "Beat (%)":     st.column_config.NumberColumn(format="%.2f%%"),
+            }
+        )
+
+        # Pager controls centered
+        ep, ei, en = st.columns([0.18, 0.64, 0.18])
+        with ep:
+            if st.button("◀ Previous", disabled=(st.session_state.earn_page <= 1), key="earn_prev"):
+                st.session_state.earn_page -= 1
+                st.rerun()
+        with ei:
+            st.markdown(
+                f"<div style='text-align:center;color:#64748B;'>Page {st.session_state.earn_page} / {total_e_pages}</div>",
+                unsafe_allow_html=True
+            )
+        with en:
+            if st.button("Next ▶", disabled=(st.session_state.earn_page >= total_e_pages), key="earn_next"):
+                st.session_state.earn_page += 1
+                st.rerun()
+
+        st.caption("Beat = Actual EPS − Estimate EPS. Positive = beat; negative = miss.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
