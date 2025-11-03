@@ -195,7 +195,18 @@ left, right = st.columns([2.2, 1], gap="large")
 
 with left:
     st.subheader("Latest headlines")
+    # --- DEDUPE STATE ---
+    seen = set()
     for _, r in df.iterrows():
+        # --- DEDUPE CHECK ---
+        t_sig = normalize_title(r["title"])
+        u_sig = normalize_url(r["link"])
+
+        if t_sig in seen or u_sig in seen:
+            continue
+        seen.add(t_sig); seen.add(u_sig)
+
+        # --- RENDER ---
         fav = favicon_for(r["link"])
         meta = f'{r["source"]} · {r["domain"]}'
         when = time_ago(r["published"])
@@ -213,6 +224,7 @@ with left:
             """,
             unsafe_allow_html=True
         )
+
 
 with right:
     st.subheader("By source")
