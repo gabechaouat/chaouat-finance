@@ -158,44 +158,104 @@ def scan_volatility(tickers: list[str], lookback_days: int, use_log: bool) -> pd
     df = df.sort_values("AnnVol", ascending=False).reset_index(drop=True)
     return df
     
-@st.cache_data(ttl=60*60)
-def scan_price_change(tickers: list[str], lookback_days: int) -> pd.DataFrame:
+@st.cache_data(ttl=30*60, show_spinner=True)
+def scan_cross_section(metric: str, universe: list[str], lookback_days: int, use_log: bool=True) -> pd.DataFrame:
     """
-    Return DataFrame ['Ticker','Ret'] where Ret is % change over the last lookback_days (trading).
-    """
-    if not tickers:
-        return pd.DataFrame(columns=["Ticker", "Ret"])
+    Return a DataFrame with columns ['Ticker','Value'] for the chosen metric,
+    computed cross-sectionally across `universe`.
 
-    # convert trading days to calendar days (buffered)
-    cal_days = int(lookback_days * 1.6) + 10
-    start = dt.date.today() - dt.timedelta(days=cal_days)
+    Supported metrics:
+      - 'Volatility' (annualized over lookback_days)
+      - 'Price change' (over lookback_days)
+      - 'YTD return'
+      - '52W change' (last 252 trading days)
+      - 'Max drawdown' (min drawdown over last 252 trading days)
+      - 'RSI (14)' (latest)
+      - 'Distance to 52W high' (last price / 52W high - 1)
+      - 'Sharpe (1y)' (mean/sd over last 252 returns)
+      - 'Beta vs S&P 500' (cov/var vs ^GSPC over last 252 returns)
+    """
+    if not universe:
+        return pd.DataFrame(columns=["Ticker", "Value"])
+
+    # Enough data for all metrics without being huge
+    cal_days = int(max(lookback_days, 60) * 1.6) + 20
+    start = dt.date.today() - dt.timedelta(days=max(420, cal_days))
+    end = dt.date.today()
 
     data = yf.download(
-        tickers, start=start, end=dt.date.today(),
-        interval="1d", auto_adjust=True, progress=False,
-        group_by="ticker", threads=True
+        universe, start=start, end=end, interval="1d",
+        auto_adjust=True, progress=False, group_by="ticker", threads=True
     )
 
-    out = []
-    for sym in tickers:
-        try:
-            if isinstance(data.columns, pd.MultiIndex):
-                close = data[(sym, "Close")].dropna()
-            else:
-                close = data["Close"].dropna()
+    # Market for beta
+    mkt_close = yf.download("^GSPC", start=start, end=end, auto_adjust=True, progress=False)["Close"]
+    mkt_ret = mkt_close.pct_change()
 
-            # restrict to last lookback_days trading points
-            close = close.tail(lookback_days + 1)
-            if close.size < 2:
+    rows = []
+    for sym in universe:
+        try:
+            close = data[(sym, "Close")] if isinstance(data.columns, pd.MultiIndex) else data["Close"]
+            close = close.dropna()
+            if close.size < 30:
                 continue
 
-            ret = (close.iloc[-1] / close.iloc[0]) - 1.0
-            out.append((sym, float(ret)))
+            if metric == "Volatility":
+                r = np.log(close).diff() if use_log else close.pct_change()
+                val = float(r.dropna().tail(lookback_days).std() * np.sqrt(252))
+            elif metric == "Price change":
+                c = close.tail(lookback_days + 1)
+                if c.size < 2: 
+                    continue
+                val = float(c.iloc[-1] / c.iloc[0] - 1.0)
+            elif metric == "YTD return":
+                y0 = dt.date(dt.date.today().year, 1, 1)
+                c = close[close.index >= pd.to_datetime(y0)]
+                if c.size < 2: 
+                    continue
+                val = float(c.iloc[-1] / c.iloc[0] - 1.0)
+            elif metric == "52W change":
+                c = close.tail(252)
+                if c.size < 2:
+                    continue
+                val = float(c.iloc[-1] / c.iloc[0] - 1.0)
+            elif metric == "Max drawdown":
+                c = close.tail(252)
+                roll_max = c.rolling(252, min_periods=1).max()
+                dd = c / roll_max - 1.0
+                val = float(dd.min())   # negative number
+            elif metric == "RSI (14)":
+                delta = close.diff()
+                gain = delta.clip(lower=0.0)
+                loss = -delta.clip(upper=0.0)
+                rs = gain.rolling(14).mean() / loss.rolling(14).mean().replace(0, np.nan)
+                rsi = 100 - (100 / (1 + rs))
+                val = float(rsi.dropna().iloc[-1])
+            elif metric == "Distance to 52W high":
+                c = close.tail(252)
+                high = c.max()
+                val = float(c.iloc[-1] / high - 1.0)   # negative if below high
+            elif metric == "Sharpe (1y)":
+                r = close.pct_change().dropna().tail(252)
+                if r.std() == 0:
+                    continue
+                val = float((r.mean() * np.sqrt(252)) / r.std())
+            elif metric == "Beta vs S&P 500":
+                r = close.pct_change().dropna().tail(252)
+                common = r.index.intersection(mkt_ret.index)
+                v = mkt_ret.loc[common].var()
+                if v == 0:
+                    continue
+                val = float(r.loc[common].cov(mkt_ret.loc[common]) / v)
+            else:
+                continue
+
+            rows.append((sym, val))
         except Exception:
             continue
 
-    df = pd.DataFrame(out, columns=["Ticker", "Ret"]).dropna()
-    return df
+    return pd.DataFrame(rows, columns=["Ticker", "Value"]).dropna()
+
 
 
 @st.cache_data(show_spinner=True)
@@ -845,36 +905,33 @@ if run_scan:
     st.subheader("Leaders and laggards")
 
     # ---------- Controls shown ABOVE the charts ----------
+    metrics_list = [
+        "Volatility",
+        "Price change",
+        "YTD return",
+        "52W change",
+        "Max drawdown",
+        "RSI (14)",
+        "Distance to 52W high",
+        "Sharpe (1y)",
+        "Beta vs S&P 500",
+    ]
     c1, c2 = st.columns([1.1, 1.0])
     with c1:
-        metric_mode = st.selectbox(
-            "Metric",
-            ["Volatility", "Price change"],
-            help="Rank by annualized volatility or by percent price change."
-        )
+        metric_mode = st.selectbox("Metric", metrics_list, help="Pick a cross-sectional metric.")
     with c2:
-        # allow Top-N from 1, step 1
         top_n = st.slider("Top-N", 1, 50, 5, step=1, help="How many names to show.")
 
-    # show only the relevant lookback slider for the chosen metric
-    vol_lookback = None
-    chg_lookback = None
-    if metric_mode == "Volatility":
-        c3 = st.columns([1.4])[0]
-        with c3:
-            vol_lookback = st.slider(
-                "Volatility window (trading days)",
-                20, 252, 60,
-                help="Rolling window used for volatility ranking."
-            )
+    # A single lookback control only for metrics that use it
+    if metric_mode in ["Volatility", "Price change"]:
+        lookback_days = st.slider(
+            "Lookback (trading days)",
+            20, 252, 60,
+            help="Window used for the chosen metric."
+        )
     else:
-        c4 = st.columns([1.6])[0]
-        with c4:
-            chg_lookback = st.slider(
-                "Price change lookback (trading days)",
-                20, 252, 60,
-                help="Period used to compute % change."
-            )
+        lookback_days = 60  # not used for others; scanner will use sensible windows
+
 
 
     # compute bar width that shrinks as N grows (clamped)
@@ -883,159 +940,110 @@ if run_scan:
     # Universe
     universe = load_sp500_df()["Symbol"].dropna().unique().tolist()
 
-    if metric_mode == "Volatility":
-        with st.spinner("Scanning volatility across the S&P 500..."):
-            scan_df = scan_volatility(universe, lookback_days=vol_lookback, use_log=use_log_returns)
+    with st.spinner(f"Scanning {metric_mode.lower()} across the S&P 500..."):
+        scan_df = scan_cross_section(metric_mode, universe, lookback_days, use_log_returns)
 
-        if scan_df.empty:
-            st.info("Not enough data to compute this cross-section.")
-        else:
-            # top N and bottom N by annualized vol
-            topN = scan_df.head(top_n).copy()
-            botN = scan_df.sort_values("AnnVol", ascending=True).head(top_n).copy()
+    if scan_df.empty:
+        st.info("Not enough data to compute this cross-section.")
+    else:
+        # How to rank
+        # For these metrics, "higher is better" (top list is descending):
+        desc_top = metric_mode not in ["Max drawdown", "Distance to 52W high"]
+        # Text formatting
+        pct_metrics = {"Volatility", "Price change", "YTD return", "52W change", "Max drawdown", "Distance to 52W high"}
+        fmt = (lambda x: f"{x*100:.2f}%") if metric_mode in pct_metrics else (lambda x: f"{x:.2f}")
 
-            topN["VolPct"] = (topN["AnnVol"] * 100).round(2)
-            topN["VolPctStr"] = topN["VolPct"].astype(str) + "%"
-            botN["VolPct"] = (botN["AnnVol"] * 100).round(2)
-            botN["VolPctStr"] = botN["VolPct"].astype(str) + "%"
+        # Top and bottom frames
+        topN = scan_df.sort_values("Value", ascending=not desc_top).head(top_n).copy()
+        botN = scan_df.sort_values("Value", ascending=desc_top).head(top_n).copy()
 
-            blues_top = px.colors.sequential.Blues[-5:] + px.colors.sequential.Blues[-5:]  # repeat if N>5
-            blues_bot = px.colors.sequential.Blues[2:7] + px.colors.sequential.Blues[2:7]
+        topN["Label"] = topN["Value"].apply(fmt)
+        botN["Label"] = botN["Value"].apply(fmt)
 
-            leftc, rightc = st.columns(2, gap="large")
+        # Titles that read naturally per metric
+        title_top = {
+            "Volatility": "Highest volatility",
+            "Price change": "Top gainers",
+            "YTD return": "Top YTD",
+            "52W change": "Top 52-week change",
+            "Max drawdown": "Smallest drawdown",
+            "RSI (14)": "Highest RSI (14)",
+            "Distance to 52W high": "Closest to 52W high",
+            "Sharpe (1y)": "Highest Sharpe (1y)",
+            "Beta vs S&P 500": "Highest Beta",
+        }[metric_mode]
+        title_bot = {
+            "Volatility": "Lowest volatility",
+            "Price change": "Top losers",
+            "YTD return": "Lowest YTD",
+            "52W change": "Lowest 52-week change",
+            "Max drawdown": "Largest drawdown",
+            "RSI (14)": "Lowest RSI (14)",
+            "Distance to 52W high": "Furthest from 52W high",
+            "Sharpe (1y)": "Lowest Sharpe (1y)",
+            "Beta vs S&P 500": "Lowest Beta",
+        }[metric_mode]
 
-            with leftc:
-                st.markdown("**Highest volatility**")
-                fig_top = px.bar(topN, x="Ticker", y="AnnVol", text="VolPctStr")
-                fig_top.update_traces(
-                    width=bar_w,
-                    marker_color=blues_top[:len(topN)],
-                    textposition="outside",
-                    textfont=dict(size=12),
-                    customdata=topN["AnnVol"],
-                    hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
+        # Bar width that shrinks as N grows (clamped)
+        bar_w = max(0.15, min(0.8, 8.0 / top_n))
+        leftc, rightc = st.columns(2, gap="large")
+
+        with leftc:
+            st.markdown(f"**{title_top}**")
+            fig_top = px.bar(topN, x="Ticker", y="Value", text="Label")
+            fig_top.update_traces(
+                width=bar_w,
+                marker_color=px.colors.sequential.Blues[-5:][:len(topN)],
+                textposition="outside",
+                textfont=dict(size=12),
+                hovertemplate="<b>%{x}</b><br>Value: %{y:.4f}<extra></extra>",
+            )
+            fig_top.update_layout(
+                xaxis_title="",
+                yaxis_title=metric_mode,
+                bargap=0.25,
+                height=360,
+                margin=dict(l=60, r=10, t=30, b=60),
+                showlegend=False,
+            )
+            fig_top.update_xaxes(showticklabels=False)
+            for x in topN["Ticker"]:
+                fig_top.add_annotation(
+                    x=x, xref="x", y=-0.18, yref="paper",
+                    text=f"<a href='?sym={x}'>{x}</a>",
+                    showarrow=False, align="center",
+                    font=dict(color="#005F7D", size=12)
                 )
-                fig_top.update_layout(
-                    yaxis_title="Annualized Volatility",
-                    xaxis_title="",
-                    bargap=0.25,
-                    height=360,
-                    margin=dict(l=60, r=10, t=30, b=60),
-                    showlegend=False,
-                )
-                fig_top.update_xaxes(showticklabels=False)
-                for x in topN["Ticker"]:
-                    fig_top.add_annotation(
-                        x=x, xref="x", y=-0.18, yref="paper",
-                        text=f"<a href='?sym={x}'>{x}</a>",
-                        showarrow=False, align="center",
-                        font=dict(color="#005F7D", size=12)
-                    )
-                st.plotly_chart(fig_top, use_container_width=True)
+            st.plotly_chart(fig_top, use_container_width=True)
 
-            with rightc:
-                st.markdown("**Lowest volatility**")
-                fig_bot = px.bar(botN, x="Ticker", y="AnnVol", text="VolPctStr")
-                fig_bot.update_traces(
-                    width=bar_w,
-                    marker_color=px.colors.sequential.Blues[2:7][:len(botN)],
-                    textposition="outside",
-                    textfont=dict(size=12),
-                    customdata=botN["AnnVol"],
-                    hovertemplate="<b>%{x}</b><br>Ann. Vol: %{customdata:.2%}<extra></extra>",
+        with rightc:
+            st.markdown(f"**{title_bot}**")
+            fig_bot = px.bar(botN, x="Ticker", y="Value", text="Label")
+            fig_bot.update_traces(
+                width=bar_w,
+                marker_color=px.colors.sequential.Blues[2:7][:len(botN)],
+                textposition="outside",
+                textfont=dict(size=12),
+                hovertemplate="<b>%{x}</b><br>Value: %{y:.4f}<extra></extra>",
+            )
+            fig_bot.update_layout(
+                xaxis_title="",
+                yaxis_title=metric_mode,
+                bargap=0.25,
+                height=360,
+                margin=dict(l=60, r=10, t=30, b=60),
+                showlegend=False,
+            )
+            fig_bot.update_xaxes(showticklabels=False)
+            for x in botN["Ticker"]:
+                fig_bot.add_annotation(
+                    x=x, xref="x", y=-0.18, yref="paper",
+                    text=f"<a href='?sym={x}'>{x}</a>",
+                    showarrow=False, align="center",
+                    font=dict(color="#005F7D", size=12)
                 )
-                fig_bot.update_layout(
-                    yaxis_title="Annualized Volatility",
-                    xaxis_title="",
-                    bargap=0.25,
-                    height=360,
-                    margin=dict(l=60, r=10, t=30, b=60),
-                    showlegend=False,
-                )
-                fig_bot.update_xaxes(showticklabels=False)
-                for x in botN["Ticker"]:
-                    fig_bot.add_annotation(
-                        x=x, xref="x", y=-0.18, yref="paper",
-                        text=f"<a href='?sym={x}'>{x}</a>",
-                        showarrow=False, align="center",
-                        font=dict(color="#005F7D", size=12)
-                    )
-                st.plotly_chart(fig_bot, use_container_width=True)
+            st.plotly_chart(fig_bot, use_container_width=True)
 
-    else:  # Price change mode
-        with st.spinner("Scanning price changes across the S&P 500..."):
-            r_df = scan_price_change(universe, lookback_days=chg_lookback)
-
-        if r_df.empty:
-            st.info("Not enough data to compute this cross-section.")
-        else:
-            # gainers and losers
-            gainers = r_df.sort_values("Ret", ascending=False).head(top_n).copy()
-            losers  = r_df.sort_values("Ret", ascending=True).head(top_n).copy()
-
-            for df_ in (gainers, losers):
-                df_["RetPct"] = (df_["Ret"] * 100).round(2)
-                df_["RetPctStr"] = df_["RetPct"].astype(str) + "%"
-
-            leftc, rightc = st.columns(2, gap="large")
-
-            with leftc:
-                st.markdown("**Top gainers**")
-                fig_g = px.bar(gainers, x="Ticker", y="Ret", text="RetPctStr")
-                fig_g.update_traces(
-                    width=bar_w,
-                    marker_color=px.colors.sequential.Blues[-5:][:len(gainers)],
-                    textposition="outside",
-                    textfont=dict(size=12),
-                    customdata=gainers["Ret"],
-                    hovertemplate="<b>%{x}</b><br>Change: %{customdata:.2%}<extra></extra>",
-                )
-                fig_g.update_layout(
-                    yaxis_title=f"Return over {chg_lookback} trading days",
-                    xaxis_title="",
-                    bargap=0.25,
-                    height=360,
-                    margin=dict(l=60, r=10, t=30, b=60),
-                    showlegend=False,
-                )
-                fig_g.update_xaxes(showticklabels=False)
-                for x in gainers["Ticker"]:
-                    fig_g.add_annotation(
-                        x=x, xref="x", y=-0.18, yref="paper",
-                        text=f"<a href='?sym={x}'>{x}</a>",
-                        showarrow=False, align="center",
-                        font=dict(color="#005F7D", size=12)
-                    )
-                st.plotly_chart(fig_g, use_container_width=True)
-
-            with rightc:
-                st.markdown("**Top losers**")
-                fig_l = px.bar(losers, x="Ticker", y="Ret", text="RetPctStr")
-                fig_l.update_traces(
-                    width=bar_w,
-                    marker_color=px.colors.sequential.Blues[2:7][:len(losers)],
-                    textposition="outside",
-                    textfont=dict(size=12),
-                    customdata=losers["Ret"],
-                    hovertemplate="<b>%{x}</b><br>Change: %{customdata:.2%}<extra></extra>",
-                )
-                fig_l.update_layout(
-                    yaxis_title=f"Return over {chg_lookback} trading days",
-                    xaxis_title="",
-                    bargap=0.25,
-                    height=360,
-                    margin=dict(l=60, r=10, t=30, b=60),
-                    showlegend=False,
-                )
-                fig_l.update_xaxes(showticklabels=False)
-                for x in losers["Ticker"]:
-                    fig_l.add_annotation(
-                        x=x, xref="x", y=-0.18, yref="paper",
-                        text=f"<a href='?sym={x}'>{x}</a>",
-                        showarrow=False, align="center",
-                        font=dict(color="#005F7D", size=12)
-                    )
-                st.plotly_chart(fig_l, use_container_width=True)
 
 
 
@@ -1054,6 +1062,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
