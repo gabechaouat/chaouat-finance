@@ -8,6 +8,8 @@ from dateutil import parser as dtparse, tz
 # --- Deduplication helpers ---
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 import re
+import numpy as np
+import yfinance as yf
 
 TRACKING_PREFIXES = ("utm_", "mc_", "gclid", "fbclid")
 
@@ -158,6 +160,109 @@ def time_ago(ts: dt.datetime | None) -> str:
     if h < 24: return f"{h}h ago"
     d = h // 24
     return f"{d}d ago"
+@st.cache_data(ttl=15*60)
+def get_latest_earnings_df(tickers: list[str]) -> pd.DataFrame:
+    """
+    For each ticker, fetch the most recent earnings row (date, estimate, actual),
+    then compute the beat/miss in $ and % if needed.
+    Works against multiple yfinance schemas.
+    """
+    rows = []
+    for sym in tickers:
+        try:
+            t = yf.Ticker(sym)
+
+            # Preferred: get_earnings_dates (newer yfinance)
+            ed = None
+            try:
+                ed = t.get_earnings_dates(limit=12)
+            except Exception:
+                ed = None
+
+            df = None
+            if isinstance(ed, pd.DataFrame) and not ed.empty:
+                df = ed.reset_index()
+                # Normalize likely column names
+                # date
+                date_col = next(
+                    (c for c in df.columns if "date" in c.lower()),
+                    df.columns[0]
+                )
+                # estimate & actual
+                est_col = next((c for c in df.columns if "estimate" in c.lower() and "eps" in c.lower()), None)
+                act_col = next((c for c in df.columns if ("reported" in c.lower() or "actual" in c.lower()) and "eps" in c.lower()), None)
+                spct_col = next((c for c in df.columns if "surprise" in c.lower() and "%" in c), None)
+                sabs_col = next((c for c in df.columns if "surprise" in c.lower() and "%" not in c.lower()), None)
+
+                df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+                df = df.dropna(subset=[date_col]).sort_values(date_col, ascending=False)
+
+                if not df.empty:
+                    r = df.iloc[0]
+                    d = pd.to_datetime(r[date_col]).date()
+                    est = pd.to_numeric(r.get(est_col, np.nan), errors="coerce") if est_col else np.nan
+                    act = pd.to_numeric(r.get(act_col, np.nan), errors="coerce") if act_col else np.nan
+
+                    # Surprise
+                    if np.isfinite(est) and np.isfinite(act) and est != 0:
+                        beat_abs = act - est
+                        beat_pct = 100.0 * (act - est) / abs(est)
+                    else:
+                        beat_abs = pd.to_numeric(r.get(sabs_col, np.nan), errors="coerce") if sabs_col else np.nan
+                        beat_pct = pd.to_numeric(r.get(spct_col, np.nan), errors="coerce") if spct_col else np.nan
+
+                    rows.append({
+                        "Ticker": sym,
+                        "Earnings date": d,
+                        "EPS estimate": est,
+                        "EPS actual": act,
+                        "Beat ($)": beat_abs,
+                        "Beat (%)": beat_pct
+                    })
+                    continue  # go next symbol
+
+            # Fallback: legacy .calendar (may or may not exist)
+            cal = None
+            try:
+                cal = t.calendar
+            except Exception:
+                cal = None
+
+            if isinstance(cal, pd.DataFrame) and not cal.empty:
+                # calendar uses index rows as fields
+                idx = {str(i).lower(): i for i in cal.index}
+                d = pd.to_datetime(cal.loc[idx.get("earnings date")].iloc[0], errors="coerce").date() if "earnings date" in idx else None
+
+                # Try various label variants
+                est_keys = [k for k in idx.keys() if "estimate" in k and "eps" in k]
+                act_keys = [k for k in idx.keys() if ("actual" in k or "reported" in k) and "eps" in k]
+
+                est = pd.to_numeric(cal.loc[idx[est_keys[0]]].iloc[0], errors="coerce") if est_keys else np.nan
+                act = pd.to_numeric(cal.loc[idx[act_keys[0]]].iloc[0], errors="coerce") if act_keys else np.nan
+
+                if np.isfinite(est) and np.isfinite(act) and est != 0:
+                    beat_abs = act - est
+                    beat_pct = 100.0 * (act - est) / abs(est)
+                else:
+                    beat_abs = np.nan
+                    beat_pct = np.nan
+
+                rows.append({
+                    "Ticker": sym,
+                    "Earnings date": d,
+                    "EPS estimate": est,
+                    "EPS actual": act,
+                    "Beat ($)": beat_abs,
+                    "Beat (%)": beat_pct
+                })
+        except Exception:
+            # swallow per-ticker errors
+            continue
+
+    out = pd.DataFrame(rows)
+    if not out.empty:
+        out = out.sort_values("Earnings date", ascending=False)
+    return out
 
 # ---------- Sidebar controls ----------
 with st.sidebar:
@@ -170,6 +275,19 @@ with st.sidebar:
     days_limit = st.slider("Max age (days)", 1, 30, 7)
     st.caption("Headlines older than this window are hidden.")
     refresh = st.button("Refresh now")
+    st.divider()
+    st.header("Earnings")
+    tickers_in = st.text_input(
+        "Tickers (comma-separated)",
+        value="AAPL, MSFT, NVDA",
+        help="Add any US tickers you want to check."
+    ).strip()
+    sort_choice = st.selectbox(
+        "Sort by",
+        ["Latest first", "Biggest beat ($)", "Biggest beat (%)", "Biggest miss ($)", "Biggest miss (%)"]
+    )
+    show_earnings = st.checkbox("Show earnings snapshot", value=True)
+
 
 if refresh:
     fetch_feeds.clear()
@@ -233,4 +351,51 @@ with right:
     st.caption("Click a headline to open the original article in a new tab.")
 
 st.markdown('</div>', unsafe_allow_html=True)
+# ---------- Earnings snapshot ----------
+if show_earnings and tickers_in:
+    syms = [s.strip().upper() for s in tickers_in.split(",") if s.strip()]
+    earn = get_latest_earnings_df(syms)
+
+    if earn.empty:
+        st.info("No earnings data found for the given tickers.")
+    else:
+        # Sorting logic
+        if sort_choice == "Latest first":
+            earn = earn.sort_values("Earnings date", ascending=False)
+        elif sort_choice == "Biggest beat ($)":
+            earn = earn.sort_values("Beat ($)", ascending=False, na_position="last")
+        elif sort_choice == "Biggest beat (%)":
+            earn = earn.sort_values("Beat (%)", ascending=False, na_position="last")
+        elif sort_choice == "Biggest miss ($)":
+            earn = earn.sort_values("Beat ($)", ascending=True, na_position="last")
+        elif sort_choice == "Biggest miss (%)":
+            earn = earn.sort_values("Beat (%)", ascending=True, na_position="last")
+
+        # Pretty panel
+        st.markdown('<div class="cf-section">', unsafe_allow_html=True)
+        st.subheader("Earnings snapshot")
+
+        # Round for neat display
+        earn_disp = earn.copy()
+        for c in ["EPS estimate", "EPS actual", "Beat ($)", "Beat (%)"]:
+            if c in earn_disp.columns:
+                earn_disp[c] = pd.to_numeric(earn_disp[c], errors="coerce").round(2)
+
+        st.dataframe(
+            earn_disp,
+            use_container_width=True,
+            hide_index=True,
+            height=300,
+            column_config={
+                "Earnings date": st.column_config.DateColumn(format="YYYY-MM-DD"),
+                "EPS estimate": st.column_config.NumberColumn(format="%.2f"),
+                "EPS actual":   st.column_config.NumberColumn(format="%.2f"),
+                "Beat ($)":     st.column_config.NumberColumn(format="%.2f"),
+                "Beat (%)":     st.column_config.NumberColumn(format="%.2f%%"),
+            }
+        )
+        st.caption("Beat = Actual EPS − Estimate EPS. Positive = beat; negative = miss.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
 
