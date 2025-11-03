@@ -497,18 +497,18 @@ html, body, * {
 }
 /* Tame metric sizes in the single-ticker “Stock statistics” panel */
 [data-testid="stMetricValue"]{
-  font-size: 20px !important;   /* was 28px */
+  font-size: 18px !important;   /* was 28px */
   line-height: 1.15;
   white-space: nowrap;
   overflow: visible !important;
   text-overflow: clip !important;
 }
 [data-testid="stMetricLabel"]{
-  font-size: 14px !important;
+  font-size: 12px !important;
   color: var(--muted);
 }
 [data-testid="stMetricDelta"]{
-  font-size: 13px !important;
+  font-size: 12px !important;
 }
 
 /* Footer */
@@ -684,18 +684,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# A row that is visually pulled up to sit on the panel
-st.markdown('<div class="cf-arrowwrap">', unsafe_allow_html=True)
-ac1, ac_sp, ac2 = st.columns([0.06, 0.88, 0.06])
-with ac1:
-    if st.button("◀", key="info_prev", help="Previous"):
-        st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
-        st.rerun()
-with ac2:
-    if st.button("▶", key="info_next", help="Next"):
-        st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
-        st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ---- end rotating panel ----
 
@@ -1257,6 +1246,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
