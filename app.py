@@ -515,15 +515,68 @@ st.markdown("""
   <div class="cf-sub">Clean, fast analytics for price trends and risk.</div>
 </div>
 """, unsafe_allow_html=True)
-st.markdown("""
-<div class="cf-info">
-  <strong>Volatility</strong> measures how much a stock’s price moves over time. 
-  A highly volatile stock fluctuates widely, offering both opportunity and risk, 
-  while a low-volatility stock tends to move more steadily. 
-  Understanding volatility helps investors gauge uncertainty, 
-  assess portfolio risk, and balance stability with potential returns.
-</div>
-""", unsafe_allow_html=True)
+# ---- Rotating single info panel (auto every 10s; manual arrows) ----
+try:
+    from streamlit_autorefresh import st_autorefresh   # built-in on Streamlit Cloud
+except Exception:
+    st_autorefresh = None
+
+PANELS = [
+    ("Volatility",
+     "measures how much a stock’s price moves over time. A highly volatile stock fluctuates widely, offering both opportunity and risk, while a low-volatility stock tends to move more steadily. Understanding volatility helps investors gauge uncertainty, assess portfolio risk, and balance stability with potential returns."),
+    ("Price Change",
+     "measures how much a stock has moved over a given period, showing whether it has been appreciating or declining in value. It helps traders quickly identify momentum leaders and laggards in the market."),
+    ("YTD Return",
+     "tracks how much a stock has gained or lost since the start of the calendar year. It is widely used by portfolio managers to benchmark performance against market indices over the current year."),
+    ("52-Week Change",
+     "compares today’s price with its level one year ago, showing the long-term trend beyond short-term noise. It is useful for spotting stocks that are outperforming or underperforming over a full market cycle."),
+    ("Max Drawdown",
+     "measures the largest peak-to-trough loss over a period, showing how much an investor could have lost at worst. It is a key risk metric used to evaluate downside exposure and portfolio resilience."),
+    ("RSI (14)",
+     "tracks recent price momentum on a scale from 0 to 100, identifying overbought and oversold conditions. Traders use it to anticipate trend reversals and time entries or exits."),
+    ("Distance to 52-Week High",
+     "measures how far a stock currently trades from its highest price in the last year. It helps investors see whether a stock is breaking out to new highs or still recovering from past losses."),
+    ("Sharpe Ratio (1y)",
+     "compares a stock’s return to its volatility, measuring how much return an investor earns per unit of risk. A higher Sharpe indicates a more efficient, risk-adjusted performer."),
+    ("Beta vs S&P 500",
+     "measures how sensitive a stock is to movements in the overall market: values above 1 move more than the index, below 1 move less. It is essential for portfolio construction, hedging, and estimating systematic risk.")
+]
+
+if "panel_idx" not in st.session_state:
+    st.session_state.panel_idx = 0
+if "panel_refresh_count" not in st.session_state:
+    st.session_state.panel_refresh_count = -1
+
+# Auto-advance every 10s (if the helper is available)
+if st_autorefresh is not None:
+    count = st_autorefresh(interval=10_000, key="rotating_info_panel")
+    if count != st.session_state.panel_refresh_count:
+        st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
+        st.session_state.panel_refresh_count = count
+
+title, text = PANELS[st.session_state.panel_idx]
+
+# Render the panel (keeps your exact cf-info look)
+st.markdown(
+    f"""
+    <div class="cf-info">
+      <strong>{title}</strong> {text}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# Arrow controls (left/right). Small, unobtrusive; panel stays identical.
+c_left, c_sp, c_right = st.columns([0.06, 0.88, 0.06])
+with c_left:
+    if st.button("◀", help="Previous"):
+        st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
+        st.experimental_rerun()
+with c_right:
+    if st.button("▶", help="Next"):
+        st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
+        st.experimental_rerun()
+# ---- end rotating panel ----
 
 st.title("Stock Analysis Dashboard")
 st.caption("Data source: Yahoo Finance via yfinance.")
@@ -1062,6 +1115,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
