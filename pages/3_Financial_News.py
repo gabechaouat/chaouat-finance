@@ -3,6 +3,13 @@ import datetime as dt
 from urllib.parse import urlparse
 import feedparser
 import streamlit as st
+# --- Guard if feedparser not installed ---
+try:
+    import feedparser  # already imported above – this re-check is safe
+except Exception:
+    st.error("Missing dependency 'feedparser'. Add it to requirements.txt (feedparser==6.0.11) "
+             "puis redémarre l’application.")
+    st.stop()
 import pandas as pd
 from dateutil import parser as dtparse, tz
 
