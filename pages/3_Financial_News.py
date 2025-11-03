@@ -310,6 +310,7 @@ with st.sidebar:
 if refresh:
     fetch_feeds.clear()
     st.session_state.news_page = 1
+    st.session_state.earn_page = 1
 
 # ---------- Fetch ----------
 df = fetch_feeds(picked_sources)
@@ -373,7 +374,7 @@ with left:
             """,
             unsafe_allow_html=True
         )
-        # Pager controls (never show more than 5 at a time)
+    # Pager controls (never show more than 5 at a time)
     cp, ci, cn = st.columns([0.18, 0.64, 0.18])
     with cp:
         if st.button("◀ Previous", disabled=(st.session_state.news_page <= 1), key="news_prev"):
@@ -397,52 +398,8 @@ with right:
     st.caption("Click a headline to open the original article in a new tab.")
 
 st.markdown('</div>', unsafe_allow_html=True)
-# ---------- Earnings snapshot ----------
-if show_earnings and tickers_in:
-    syms = [s.strip().upper() for s in tickers_in.split(",") if s.strip()]
-    earn = get_latest_earnings_df(syms)
 
-    if earn.empty:
-        st.info("No earnings data found for the given tickers.")
-    else:
-        # Sorting logic
-        if sort_choice == "Latest first":
-            earn = earn.sort_values("Earnings date", ascending=False)
-        elif sort_choice == "Biggest beat ($)":
-            earn = earn.sort_values("Beat ($)", ascending=False, na_position="last")
-        elif sort_choice == "Biggest beat (%)":
-            earn = earn.sort_values("Beat (%)", ascending=False, na_position="last")
-        elif sort_choice == "Biggest miss ($)":
-            earn = earn.sort_values("Beat ($)", ascending=True, na_position="last")
-        elif sort_choice == "Biggest miss (%)":
-            earn = earn.sort_values("Beat (%)", ascending=True, na_position="last")
-
-        # Pretty panel
-        st.markdown('<div class="cf-section">', unsafe_allow_html=True)
-        st.subheader("Earnings snapshot")
-
-        # Round for neat display
-        earn_disp = earn.copy()
-        for c in ["EPS estimate", "EPS actual", "Beat ($)", "Beat (%)"]:
-            if c in earn_disp.columns:
-                earn_disp[c] = pd.to_numeric(earn_disp[c], errors="coerce").round(2)
-
-        st.dataframe(
-            earn_disp,
-            use_container_width=True,
-            hide_index=True,
-            height=300,
-            column_config={
-                "Earnings date": st.column_config.DateColumn(format="YYYY-MM-DD"),
-                "EPS estimate": st.column_config.NumberColumn(format="%.2f"),
-                "EPS actual":   st.column_config.NumberColumn(format="%.2f"),
-                "Beat ($)":     st.column_config.NumberColumn(format="%.2f"),
-                "Beat (%)":     st.column_config.NumberColumn(format="%.2f%%"),
-            }
-        )
-        st.caption("Beat = Actual EPS − Estimate EPS. Positive = beat; negative = miss.")
-        st.markdown('</div>', unsafe_allow_html=True)
-        # ---------- Earnings section (own 5-item pager) ----------
+# ---------- Earnings section (own 5-item pager) ----------
 if earn_show:
     # Resolve universe
     if tickers_in:
