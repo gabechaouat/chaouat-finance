@@ -1,144 +1,199 @@
 # pages/3_Financial_News.py
-import streamlit as st
+import datetime as dt
+from urllib.parse import urlparse
 import feedparser
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
-import re
-from collections import OrderedDict
+import streamlit as st
+import pandas as pd
+from dateutil import parser as dtparse, tz
 
+# ---------- Page config ----------
 st.set_page_config(page_title="Financial News", page_icon="📰", layout="wide")
 
-# =========================
-# DEDUPLICATION HELPERS
-# =========================
-TRACKING_PREFIXES = ("utm_", "mc_", "gclid", "fbclid", "icid")
-STOP = {"the","a","an","live","updated","breaking","analysis","opinion"}
+# ---------- Styles + header (identique au style de la page principale) ----------
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+:root{
+  --primary:#007BA7; --primary-dark:#005F7D; --accent:#00B0FF;
+  --bg:#F7FAFC; --card:#FFFFFF; --text:#0F172A; --muted:#64748B;
+}
+html, body, * { font-family:'Montserrat', sans-serif !important; }
+[data-testid="stAppViewContainer"] > .main { padding-top: 54px; }
+.cf-sticky {
+  position: fixed; top:0; left:0; right:0; z-index:10000;
+  width:100%; height:44px; color:#fff;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  display:flex; align-items:center; padding:0 14px;
+  border-bottom:1px solid rgba(255,255,255,.15);
+  box-shadow:0 6px 14px rgba(0,0,0,.08);
+  font-weight:700; letter-spacing:.2px; font-size:18px;
+}
+.cf-hero{
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color:#fff; padding:28px 32px; border-radius:20px;
+  box-shadow:0 8px 24px rgba(0,123,167,.25); margin:8px 0 24px 0;
+}
+.cf-brand{ font-weight:700; font-size:40px; letter-spacing:.4px; }
+.cf-section{
+  background: var(--card); border:1px solid #E2E8F0; border-radius:18px;
+  padding:22px; box-shadow:0 8px 30px rgba(15,23,42,.06); margin:6px 0 24px 0;
+}
+.news-card{
+  border:1px solid #E2E8F0; border-radius:14px; padding:14px 14px;
+  margin-bottom:10px; background:#fff;
+}
+.news-title{ font-size:16px; font-weight:700; color:#0F172A; margin:0; }
+.news-meta{ color:var(--muted); font-size:13px; margin-top:4px; }
+.source-chip{
+  display:inline-flex; align-items:center; gap:8px; padding:4px 8px;
+  border:1px solid #E2E8F0; border-radius:999px; font-size:12px; color:#0F172A;
+  background:#F8FAFC;
+}
+.source-chip img{ width:16px; height:16px; border-radius:3px; }
+.search-row { margin-bottom: 10px; }
+</style>
+<div class="cf-sticky">Chaouat Finance</div>
+""", unsafe_allow_html=True)
 
-def normalize_url(u: str) -> str:
-    pu = urlparse(u)
-    q = [(k, v) for k, v in parse_qsl(pu.query, keep_blank_values=True)
-         if not k.lower().startswith(TRACKING_PREFIXES)]
-    pu = pu._replace(netloc=pu.netloc.lower().replace("www.", ""),
-                     query=urlencode(q, doseq=True),
-                     fragment="")
-    return urlunparse(pu)
+st.markdown("""
+<div class="cf-hero">
+  <div class="cf-brand">Financial News</div>
+  <div>Fresh headlines from top finance outlets. Click to read the full story.</div>
+</div>
+""", unsafe_allow_html=True)
 
-_ws = re.compile(r"\s+")
-_punct = re.compile(r"[^\w\s$%-]")  # keep $, %, - for tickers/percents
+# ---------- Sources RSS ----------
+SOURCES = {
+    "Reuters – Business": "https://feeds.reuters.com/reuters/businessNews",
+    "Reuters – Mergers & Acquisitions": "https://feeds.reuters.com/reuters/mergersNews",
+    "NYT – DealBook": "https://rss.nytimes.com/services/xml/rss/nyt/DealBook.xml",
+    "Crunchbase News": "https://news.crunchbase.com/feed/",
+    # Google News requête M&A (7 derniers jours)
+    "Google News – M&A (7d)": "https://news.google.com/rss/search?q=acquisition+OR+acquires+OR+merger+OR+to+buy+when:7d&hl=en-US&gl=US&ceid=US:en",
+    # CNBC Top News (flux principal)
+    "CNBC – Top News": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+}
 
-def normalize_title(t: str) -> str:
-    t = t.lower()
-    t = t.replace("&", " and ")
-    t = _punct.sub(" ", t)
-    t = _ws.sub(" ", t).strip()
-    return t
-
-def title_signature(t_norm: str) -> str:
-    toks = [w for w in t_norm.split() if len(w) > 3 and w not in STOP]
-    return " ".join(sorted(set(toks)))
-
-def jaccard(a: str, b: str) -> float:
-    sa, sb = set(a.split()), set(b.split())
-    if not sa or not sb:
-        return 0.0
-    return len(sa & sb) / len(sa | sb)
-
-def is_near_duplicate(t1_norm: str, t2_norm: str) -> bool:
-    return jaccard(title_signature(t1_norm), title_signature(t2_norm)) >= 0.8
-
-def host_path(u: str) -> str:
-    pu = urlparse(u)
-    return pu.netloc + pu.path
-
-def materialize(item, url_sig, title_norm, tsig):
-    return {
-        "title": item["title"],
-        "title_norm": title_norm,
-        "title_sig": tsig,
-        "url": url_sig,
-        "url_key": url_sig,                # exact URL signature
-        "host_path": host_path(url_sig),   # domain+path signature
-        "published": item.get("published_parsed") or item.get("published") or 0,
-        "source": urlparse(url_sig).netloc,
-    }
-
-AGG = {"news.google.com", "finance.yahoo.com"}  # aggregators (prefer originals)
-
-def is_preferable(new, old):
-    new_host = urlparse(normalize_url(new["link"])).netloc
-    old_host = urlparse(old["url"]).netloc
-    # Prefer original publisher over aggregator
-    if (old_host in AGG) and (new_host not in AGG):
-        return True
-    if (new_host in AGG) and (old_host not in AGG):
-        return False
-    # Otherwise, keep the earlier (often “original”) one
-    n_pub = new.get("published_parsed") or 9e18
-    return n_pub < old.get("published", 9e18)
-
-clusters: OrderedDict[str, dict] = OrderedDict()
-
-def add_item(item):
-    url_sig = normalize_url(item["link"])
-    title_norm = normalize_title(item["title"])
-    tsig = title_signature(title_norm)
-
-    for cid, keep in list(clusters.items()):
-        # 1) exact same normalized URL
-        if keep["url_key"] == url_sig:
-            return
-        # 2) same host+path (query ignored)
-        if keep["host_path"] == host_path(url_sig):
-            return
-        # 3) exact same token-set signature
-        if keep["title_sig"] == tsig:
-            return
-        # 4) fuzzy near-duplicate by Jaccard
-        if is_near_duplicate(title_norm, keep["title_norm"]):
-            if is_preferable(item, keep):
-                clusters[cid] = materialize(item, url_sig, title_norm, tsig)
-            return
-
-    cid = f"{len(clusters)+1:05d}"
-    clusters[cid] = materialize(item, url_sig, title_norm, tsig)
-
-# =========================
-# FEEDS
-# =========================
-FEEDS = [
-    "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",      # WSJ
-    "https://www.investing.com/rss/news.rss",              # Investing.com
-    "https://www.ft.com/?format=rss",                      # Financial Times
-    "https://seekingalpha.com/market_currents.xml",        # Seeking Alpha
-    "https://www.marketwatch.com/rss/topstories",          # MarketWatch
-]
-
-# =========================
-# FETCH + BUILD CLUSTERS
-# =========================
-for url in FEEDS:
+# ---------- Helpers ----------
+def domain_from_url(url: str) -> str:
     try:
-        feed = feedparser.parse(url)
-        for e in feed.entries:
-            title = (e.get("title") or "").strip()
-            link  = (e.get("link") or "").strip()
-            if not title or not link:
-                continue
-            add_item({
-                "title": title,
-                "link": link,
-                "published_parsed": e.get("published_parsed")
-            })
+        return urlparse(url).netloc.replace("www.", "")
     except Exception:
-        continue
+        return ""
 
-# =========================
-# RENDER
-# =========================
-st.title("Financial News")
-st.caption("De-duplicated headlines from multiple financial sources (one link per story).")
+def favicon_for(url: str) -> str:
+    dom = domain_from_url(url)
+    return f"https://www.google.com/s2/favicons?domain={dom}&sz=64" if dom else ""
 
-for item in clusters.values():
-    st.markdown(
-        f"- [{item['title']}]({item['url']})  \n  <sub>({item['source']})</sub>",
-        unsafe_allow_html=True
-    )
+@st.cache_data(ttl=15*60, show_spinner=False)
+def fetch_feeds(selected_sources: list[str]) -> pd.DataFrame:
+    """Fetch and normalize items from multiple RSS/Atom feeds."""
+    rows = []
+    for name in selected_sources:
+        feed_url = SOURCES.get(name)
+        if not feed_url:
+            continue
+        try:
+            fp = feedparser.parse(feed_url)
+            for e in fp.entries:
+                link = e.get("link") or ""
+                title = e.get("title") or "(no title)"
+                published = e.get("published") or e.get("updated") or ""
+                try:
+                    # Best-effort parse
+                    ts = dtparse.parse(published).astimezone(tz.tzlocal()) if published else None
+                except Exception:
+                    ts = None
+                rows.append({
+                    "source": name,
+                    "title": title.strip(),
+                    "link": link,
+                    "published": ts,
+                    "domain": domain_from_url(link),
+                })
+        except Exception:
+            continue
+    if not rows:
+        return pd.DataFrame(columns=["source","title","link","published","domain"])
+    df = pd.DataFrame(rows).drop_duplicates(subset=["title","link"])
+    # Most recent first
+    df = df.sort_values("published", ascending=False, na_position="last").reset_index(drop=True)
+    return df
+
+def time_ago(ts: dt.datetime | None) -> str:
+    if not ts:
+        return ""
+    now = dt.datetime.now(tz=tz.tzlocal())
+    delta = now - ts
+    s = int(delta.total_seconds())
+    if s < 60: return f"{s}s ago"
+    m = s // 60
+    if m < 60: return f"{m}m ago"
+    h = m // 60
+    if h < 24: return f"{h}h ago"
+    d = h // 24
+    return f"{d}d ago"
+
+# ---------- Sidebar controls ----------
+with st.sidebar:
+    st.header("Sources")
+    default_sel = list(SOURCES.keys())  # tout sélectionné par défaut
+    picked_sources = st.multiselect("Pick sources", options=list(SOURCES.keys()), default=default_sel)
+    st.divider()
+    st.header("Filters")
+    q = st.text_input("Search headline (optional)", placeholder="acquires, merger, company name…")
+    days_limit = st.slider("Max age (days)", 1, 30, 7)
+    st.caption("Headlines older than this window are hidden.")
+    refresh = st.button("Refresh now")
+
+if refresh:
+    fetch_feeds.clear()
+
+# ---------- Fetch ----------
+df = fetch_feeds(picked_sources)
+if df.empty:
+    st.info("No news retrieved. Try different sources or refresh.")
+    st.stop()
+
+# Age filter
+cutoff = dt.datetime.now(tz=tz.tzlocal()) - dt.timedelta(days=days_limit)
+df = df[(df["published"].isna()) | (df["published"] >= cutoff)]
+
+# Text filter
+if q:
+    q_low = q.lower()
+    df = df[df["title"].str.lower().str.contains(q_low, na=False)]
+
+# ---------- Render ----------
+st.markdown('<div class="cf-section">', unsafe_allow_html=True)
+left, right = st.columns([2.2, 1], gap="large")
+
+with left:
+    st.subheader("Latest headlines")
+    for _, r in df.iterrows():
+        fav = favicon_for(r["link"])
+        meta = f'{r["source"]} · {r["domain"]}'
+        when = time_ago(r["published"])
+        st.markdown(
+            f"""
+            <div class="news-card">
+              <div class="news-title"><a href="{r['link']}" target="_blank" rel="noopener noreferrer">{r['title']}</a></div>
+              <div class="news-meta">
+                <span class="source-chip">
+                  {'<img src="'+fav+'" />' if fav else ''}{meta}
+                </span>
+                {' · ' + when if when else ''}
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+with right:
+    st.subheader("By source")
+    counts = df.groupby("source", as_index=False).size().sort_values("size", ascending=False)
+    st.dataframe(counts.rename(columns={"size":"Headlines"}), use_container_width=True, hide_index=True, height=250)
+    st.caption("Click a headline to open the original article in a new tab.")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
