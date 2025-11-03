@@ -631,26 +631,72 @@ with left:
         )
 
 
-    if chart_mode == "Price":
-        fig = px.line(
-            prices_all, x="Date", y="Close", color="Ticker",
-            labels={"Close": "Adj. Close ($)", "Date": "Date"},
+        # ---- build overlays figure (uses the sidebar multiselect `chart_overlays`)
+        ind_map = compute_indicators(prices_all)
+
+        vol_df = None
+        if "Rolling Volatility" in chart_overlays:
+            vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+        # Price
+        if "Price" in chart_overlays:
+            for tkr, g in prices_all.sort_values("Date").groupby("Ticker"):
+                fig.add_trace(
+                    go.Scatter(x=g["Date"], y=g["Close"], name=f"{tkr} Price", mode="lines"),
+                    secondary_y=False
+                )
+
+        # SMA overlays
+        if "SMA 50" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["SMA50"], name=f"{tkr} SMA50", mode="lines", line=dict(dash="dot")),
+                    secondary_y=False
+                )
+        if "SMA 200" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["SMA200"], name=f"{tkr} SMA200", mode="lines", line=dict(dash="dash")),
+                    secondary_y=False
+                )
+
+        # Rolling Vol (annualized)
+        if vol_df is not None and not vol_df.empty:
+            for tkr, g in vol_df.sort_values("Date").groupby("Ticker"):
+                fig.add_trace(
+                    go.Scatter(x=g["Date"], y=g["AnnVol"], name=f"{tkr} Ann. Vol", mode="lines"),
+                    secondary_y=False
+                )
+
+        # RSI (secondary axis)
+        if "RSI (14)" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["RSI14"], name=f"{tkr} RSI(14)", mode="lines"),
+                    secondary_y=True
+                )
+
+        # Drawdown (secondary axis)
+        if "Drawdown" in chart_overlays:
+            for tkr, ind in ind_map.items():
+                fig.add_trace(
+                    go.Scatter(x=ind.index, y=ind["Drawdown"], name=f"{tkr} Drawdown", mode="lines", fill="tozeroy"),
+                    secondary_y=True
+                )
+
+        fig.update_layout(
+            height=460,
+            margin=dict(l=10, r=10, t=30, b=10),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
         )
-        fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
+        fig.update_xaxes(title_text="Date")
+        fig.update_yaxes(title_text="Price / Volatility", secondary_y=False)
+        fig.update_yaxes(title_text="RSI / Drawdown", secondary_y=True)
+
         st.plotly_chart(fig, use_container_width=True)
 
-    else:  # Rolling Volatility
-        vol_df = compute_rolling_vol(prices_all, window=vol_window, use_log=use_log_returns)
-
-        if vol_df.empty:
-            st.info("Not enough data to compute rolling volatility for the current window.")
-        else:
-            fig = px.line(
-                vol_df, x="Date", y="AnnVol", color="Ticker",
-                labels={"AnnVol": "Annualized Volatility", "Date": "Date"},
-            )
-            fig.update_layout(height=460, margin=dict(l=10, r=10, t=30, b=10))
-            st.plotly_chart(fig, use_container_width=True)
 with right:
     # ---------- build the data used by either view ----------
     # Latest price per ticker
@@ -693,6 +739,22 @@ with right:
             "YTD Return (%)": (ytd_ret * 100).round(2).astype(float),
         })
         comp = comp.reindex(pick)  # preserve user selection order
+        # ---- extras: 52W High/Low and Max DD from indicators
+        ind_map = compute_indicators(prices_all)
+        extras = []
+        for t in pick:
+            ind = ind_map.get(t)
+            if ind is None or ind.empty:
+                extras.append((t, np.nan, np.nan, np.nan))
+                continue
+            tail = ind.tail(252)
+            high_52w = tail["Close"].max()
+            low_52w  = tail["Close"].min()
+            max_dd   = ind["Drawdown"].min() * 100  # %
+            extras.append((t, high_52w, low_52w, max_dd))
+
+        extra_df = pd.DataFrame(extras, columns=["Ticker","52W High","52W Low","Max DD (%)"]).set_index("Ticker")
+        comp = comp.join(extra_df, how="left")
 
         st.dataframe(
             comp,
@@ -702,6 +764,9 @@ with right:
                 "Last Price ($)": st.column_config.NumberColumn(format="%.2f"),
                 f"Vol {vol_window}d (ann)": st.column_config.NumberColumn(format="%.2f%%"),
                 "YTD Return (%)": st.column_config.NumberColumn(format="%.2f%%"),
+                "52W High": st.column_config.NumberColumn(format="%.2f"),
+                "52W Low": st.column_config.NumberColumn(format="%.2f"),
+                "Max DD (%)": st.column_config.NumberColumn(format="%.2f%%"),
             }
         )
     else:
@@ -984,6 +1049,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
