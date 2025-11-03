@@ -526,7 +526,6 @@ small, .cf-foot{
 st.markdown("""
 <div class="cf-hero">
   <div class="cf-brand">Chaouat Finance</div>
-  <div class="cf-sub">Clean, fast analytics for price trends and risk.</div>
 </div>
 """, unsafe_allow_html=True)
 # ---- Rotating single info panel (auto every 10s; manual arrows) ----
@@ -1136,6 +1135,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
