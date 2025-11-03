@@ -101,21 +101,90 @@ def px_on_or_before(raw, sym: str, when: dt.date) -> float | None:
 # ---------- page ----------
 st.set_page_config(page_title="Investment Simulator", page_icon="🧮", layout="wide")
 
-st.markdown(
-    """
-    <style>
-      .cf-sticky { position: sticky; top: 0; z-index: 9999;
-                   background: #F7FAFC; border-bottom: 1px solid #E2E8F0;
-                   padding: 8px 6px; margin-bottom: 8px; }
-      .cf-sticky .brand { font-weight: 700; font-size: 14px; letter-spacing:.2px;}
-      .cf-stockline{ display:flex; align-items:center; gap:10px; margin: 8px 0 0 2px;}
-      .cf-logo{ width:26px; height:26px; object-fit:contain; }
-      .cf-stocktext{ font-size:18px; font-weight:700; color:#0F172A; }
-    </style>
-    <div class="cf-sticky"><span class="brand">Chaouat Finance · Investment simulator</span></div>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
+:root{
+  --primary:#007BA7;        /* cerulean */
+  --primary-dark:#005F7D;
+  --accent:#00B0FF;
+  --bg:#F7FAFC;
+  --card:#FFFFFF;
+  --text:#0F172A;
+  --muted:#64748B;
+}
+
+html, body, * { font-family: 'Montserrat', sans-serif !important; }
+[data-testid="stAppViewContainer"], [data-testid="stSidebar"],
+[data-testid="stMarkdownContainer"] * { font-family: 'Montserrat', sans-serif !important; }
+
+/* Small fixed header bar */
+.cf-sticky {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 10000;
+  width: 100%;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: #fff;
+  height: 44px;
+  display: flex; align-items: center;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255,255,255,.15);
+  box-shadow: 0 6px 14px rgba(0,0,0,.08);
+  font-weight: 700; letter-spacing: .2px; font-size: 18px;
+}
+
+/* Push content down so it doesn't sit under the fixed bar */
+[data-testid="stAppViewContainer"] > .main {
+  padding-top: 54px; /* 44px header + 10px breathing room */
+}
+
+/* Brand hero block (same as app page, without subtitle) */
+.cf-hero{
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: #fff;
+  padding: 28px 32px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0,123,167,.25);
+  margin: 8px 0 24px 0;
+}
+.cf-brand{
+  font-weight: 700; font-size: 40px; letter-spacing: .4px;
+}
+
+/* Buttons (consistent) */
+.stButton>button, .stDownloadButton>button{
+  background: var(--primary) !important; color: #fff !important; border: 0 !important;
+  border-radius: 12px !important; padding: 10px 16px !important;
+}
+.stButton>button:hover{ background: var(--primary-dark) !important; }
+
+/* Metric card container */
+.metric-card{
+  background: var(--card);
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(15,23,42,.06);
+}
+
+/* Stock line header (logo + name) */
+.cf-stockline{ display:flex; align-items:center; gap:12px; margin: 0 0 8px 4px; }
+.cf-logo{ width:32px; height:32px; object-fit:contain; }
+.cf-stocktext{ font-size:22px; font-weight:700; color:#0F172A; }
+
+/* Small note text */
+.small-note{ color: var(--muted); font-size: 12px; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="cf-sticky">Chaouat Finance</div>', unsafe_allow_html=True)
+st.markdown("""
+<div class="cf-hero">
+  <div class="cf-brand">Chaouat Finance</div>
+</div>
+""", unsafe_allow_html=True)
 
 st.title("Investment Simulator")
 st.caption("Model multiple purchases across tickers and dates. Manual price overrides historical price; otherwise the adjusted close is used.")
@@ -301,6 +370,7 @@ with left:
             st.plotly_chart(fig, use_container_width=True)
 
 with right:
+    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
     st.subheader("Summary")
     st.dataframe(
         agg.rename(columns={
@@ -318,6 +388,7 @@ with right:
     pl_total = value_total - invested_total
     pl_pct_total = (pl_total / invested_total * 100.0) if invested_total > 0 else np.nan
     st.metric("Portfolio value", f"${value_total:,.2f}", delta=f"{pl_total:,.2f}  ({pl_pct_total:.2f}%)")
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.subheader("Lots (expanded)")
 st.dataframe(
