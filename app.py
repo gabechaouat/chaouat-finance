@@ -795,7 +795,7 @@ with st.container(border=True):
 
     prices_all = fetch_history_multi(pick, start, end)
     if prices_all.empty:
-    st.error("No price data returned. Try different symbols.")
+        st.error("No price data returned. Try different symbols.")
         st.stop()
 
     # === CHART + COMPARISON STATS IN ONE ROW ===
@@ -1219,6 +1219,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
