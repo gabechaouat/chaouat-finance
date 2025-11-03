@@ -582,6 +582,31 @@ div[aria-label="stContainerBorder"] > div:first-child{
   margin-bottom: 18px;
 }
 
+/* Panel with built-in arrows */
+.cf-info.cf-info-has-arrows{
+  position: relative;
+  padding-left: 64px;   /* leave room for left arrow */
+  padding-right: 64px;  /* leave room for right arrow */
+}
+
+/* Arrow buttons sitting on the panel */
+.cf-arrow-btn{
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px; height: 42px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff !important;
+  text-decoration: none !important;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,123,167,.30);
+  font-weight: 700;
+  line-height: 1;
+}
+.cf-arrow-btn.left  { left: 12px; }
+.cf-arrow-btn.right { right: 12px; }
+
 /* Gentle card styling for the right-side metrics panel (you already had .metric-card; keeping it consistent) */
 </style>
 """, unsafe_allow_html=True)
@@ -621,6 +646,20 @@ PANELS = [
 
 if "panel_idx" not in st.session_state:
     st.session_state.panel_idx = 0
+# Handle HTML-arrow clicks via query param ?p=prev|next
+_qp = get_query_params()
+_p = _qp.get("p")
+if isinstance(_p, list):  # experimental_get_query_params() returns lists
+    _p = _p[0]
+if _p == "prev":
+    st.session_state.panel_idx = (st.session_state.panel_idx - 1) % len(PANELS)
+elif _p == "next":
+    st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
+# clear the param so the page doesn't keep advancing on refresh
+try:
+    st.query_params.clear()                         # new API
+except Exception:
+    st.experimental_set_query_params()             # fallback for older Streamlit
 if "panel_refresh_count" not in st.session_state:
     st.session_state.panel_refresh_count = -1
 
@@ -633,14 +672,13 @@ if st_autorefresh is not None:
 
 title, text = PANELS[st.session_state.panel_idx]
 
-# Wrapper so arrows can overlap the panel
-st.markdown('<div class="cf-info-wrap">', unsafe_allow_html=True)
-
-# The panel (same visual style you already use)
+# One HTML panel that includes the arrows as links
 st.markdown(
     f"""
-    <div class="cf-info">
-      <strong>{title}</strong> {text}
+    <div class="cf-info cf-info-has-arrows">
+      <a class="cf-arrow-btn left"  href="?p=prev" aria-label="Previous">◀</a>
+      <a class="cf-arrow-btn right" href="?p=next" aria-label="Next">▶</a>
+      <div><strong>{title}</strong> {text}</div>
     </div>
     """,
     unsafe_allow_html=True
@@ -1219,6 +1257,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
