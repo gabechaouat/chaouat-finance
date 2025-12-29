@@ -1,0 +1,10 @@
+chaouat-economics-lab/
+  Home.py
+  requirements.txt
+  pages/
+    1_Policy_Lab.py
+    2_Lessons.py
+    3_Teaching_Material.py
+    4_Methodology.py
+    9_Tools_Market_Data.py
+  materials/   (optional for PDFs)
