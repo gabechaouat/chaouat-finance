@@ -8,8 +8,8 @@ import streamlit as st
 # "pages/Policy_Lab.py"
 # "pages/Teaching_Material.py"
 PAGES = {
-    "Policy Lab": "pages/Policy_Lab.py",
-    "Teaching Material": "pages/Teaching_Material.py",
+    "Policy Lab": "pages/1_Policy_Lab.py",
+    "Teaching Material": "pages/3_Teaching_Material.py",
 }
 
 st.set_page_config(page_title="Chaouat Economics Lab", page_icon="📘", layout="wide")
