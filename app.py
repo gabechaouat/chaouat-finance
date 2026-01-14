@@ -11,255 +11,269 @@ PAGES = {
 
 st.set_page_config(page_title="Chaouat Economics Lab", page_icon="📘", layout="wide")
 
-# ----- Minimal, non-card dashboard styling -----
-st.markdown("""
+# ---- State: recent launches (home-only, additive) ----
+if "home_recent" not in st.session_state:
+    st.session_state.home_recent = []  # [{"label":..., "page":..., "ts":...}]
+
+def _switch_to(page_path: str, label_for_recent: str, page_name: str):
+    st.session_state.home_recent.insert(
+        0,
+        {"label": label_for_recent, "page": page_name, "ts": datetime.now().strftime("%Y-%m-%d %H:%M")},
+    )
+    st.session_state.home_recent = st.session_state.home_recent[:8]
+    try:
+        st.switch_page(page_path)
+    except Exception:
+        st.error("Navigation failed. Verify that the PAGES paths match your /pages filenames.")
+
+# ---- Style: stronger brand banner + blue CTAs + less 'blank white' ----
+st.markdown(
+    """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
 
 html, body, * { font-family: 'Montserrat', sans-serif !important; }
-
-.block-container { padding-top: 0.8rem; padding-bottom: 2rem; max-width: 1200px; }
 
 :root{
   --primary:#007BA7;
   --accent:#00B0FF;
+  --navy:#0B2B3A;
+  --bg1:#F3F8FE;     /* soft blue-gray */
+  --bg2:#FFFFFF;
+  --card:#FFFFFF;
   --text:#0F172A;
   --muted:#64748B;
-  --border:#E2E8F0;
-  --bg:#FFFFFF;
+  --border:#DCE6F2;
 }
 
-.topbar{
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 14px 14px;
-  background: var(--bg);
+body {
+  background: radial-gradient(1200px 600px at 20% -10%, rgba(0,176,255,.18) 0%, rgba(0,176,255,0) 60%),
+              radial-gradient(900px 500px at 95% 10%, rgba(0,123,167,.16) 0%, rgba(0,123,167,0) 55%),
+              linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 70%);
 }
 
-.titleline{
-  display:flex;
-  align-items:baseline;
-  justify-content:space-between;
-  gap: 16px;
-  margin-bottom: 10px;
-}
+.block-container { padding-top: 0.8rem; padding-bottom: 2rem; max-width: 1220px; }
 
-.brand{
-  font-size: 26px;
+.cf-hero{
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: #fff;
+  padding: 28px 30px;
+  border-radius: 22px;
+  box-shadow: 0 14px 36px rgba(0,123,167,.26);
+  margin: 6px 0 14px 0;
+  position: relative;
+  overflow: hidden;
+}
+.cf-hero:before{
+  content:"";
+  position:absolute;
+  inset:-40px -80px auto auto;
+  width: 340px;
+  height: 340px;
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+  transform: rotate(10deg);
+}
+.cf-brand{
   font-weight: 800;
-  color: var(--text);
+  font-size: 46px;
+  letter-spacing: .2px;
+  line-height: 1.05;
 }
-
-.tag{
-  font-size: 12px;
-  color: var(--muted);
+.cf-sub{
+  margin-top: 10px;
+  opacity: .95;
+  font-size: 15.5px;
+  line-height: 1.55;
+  max-width: 980px;
 }
+.cf-sub b { font-weight: 800; }
 
 .section{
-  margin-top: 14px;
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 14px 14px;
-  background: var(--bg);
+  border-radius: 18px;
+  padding: 16px 16px;
+  box-shadow: 0 10px 30px rgba(15,23,42,.06);
 }
 
-.step{
-  border-left: 4px solid var(--primary);
-  padding: 10px 12px;
-  margin: 10px 0;
-  background: #FBFDFF;
-  border-radius: 10px;
+.badge{
+  display:inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #073042;
+  background: rgba(0,176,255,.18);
+  border: 1px solid rgba(0,176,255,.25);
 }
 
 .smallmuted{ color: var(--muted); font-size: 12px; }
-hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
 
-kbd{
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--text);
-  background: #F8FAFC;
+.hr { border-top: 1px solid var(--border); margin: 12px 0; }
+
+/* Make primary buttons visibly blue */
+div.stButton > button {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(0,123,167,.35);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  color: white;
+  font-weight: 800;
+  padding: 0.7rem 1rem;
+  box-shadow: 0 10px 24px rgba(0,123,167,.22);
 }
+div.stButton > button:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+  transition: 120ms ease;
+}
+
+/* Secondary button look (we'll use st.button but wrap in container class via markdown hint text) */
+.secondary-note {
+  border: 1px dashed rgba(100,116,139,.45);
+  background: rgba(248,250,252,.85);
+  border-radius: 14px;
+  padding: 12px 12px;
+}
+
+/* Tighten default Streamlit element spacing a bit */
+[data-testid="stCaptionContainer"] { margin-top: -4px; }
 </style>
-""", unsafe_allow_html=True)
-
-# ---- Session-state for recent runs / bookmarks (home-only; additive) ----
-if "home_recent" not in st.session_state:
-    st.session_state.home_recent = []  # list of dicts: {"label":..., "page":..., "ts":...}
-
-def _switch_to(page_path: str, label_for_recent: str, page_name: str):
-    # Record "recent"
-    st.session_state.home_recent.insert(0, {
-        "label": label_for_recent,
-        "page": page_name,
-        "ts": datetime.now().strftime("%Y-%m-%d %H:%M"),
-    })
-    st.session_state.home_recent = st.session_state.home_recent[:8]
-
-    # Navigate
-    try:
-        st.switch_page(page_path)
-    except Exception:
-        st.error("Navigation failed. Verify PAGES paths match your /pages filenames.")
+""",
+    unsafe_allow_html=True,
+)
 
 # =========================
-# TOP COMMAND BAR
+# HERO / BRAND BANNER
 # =========================
-st.markdown("""
-<div class="topbar">
-  <div class="titleline">
-    <div class="brand">Chaouat Economics Lab</div>
-    <div class="tag">Press <kbd>Ctrl</kbd> + <kbd>R</kbd> to refresh after edits · Educational use only</div>
+st.markdown(
+    """
+<div class="cf-hero">
+  <div class="badge">HOME</div>
+  <div class="cf-brand">Chaouat Economics Lab</div>
+  <div class="cf-sub">
+    Two core areas:
+    <b>Policy Lab</b> (interactive models with explicit assumptions) and
+    <b>Teaching Material</b> (decks/handouts for tutoring & classroom use).
   </div>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# Controls row (feels like a command bar, not a hero)
-c1, c2, c3, c4, c5 = st.columns([1.4, 1.0, 0.8, 1.0, 0.9], gap="medium")
-with c1:
+# =========================
+# PRIMARY NAVIGATION (BIG CTAs)
+# =========================
+cta_left, cta_right = st.columns([1, 1], gap="large")
+
+with cta_left:
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("Policy Lab")
+    st.caption("Run interactive policy experiments. Export charts + CSV scenarios.")
+    if st.button("Open Policy Lab", use_container_width=True, key="open_policy"):
+        _switch_to(PAGES["Policy Lab"], "Opened Policy Lab", "Policy Lab")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with cta_right:
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("Teaching Material")
+    st.caption("Browse slide decks, worksheets, and tutor-ready session structures.")
+    if st.button("Open Teaching Material", use_container_width=True, key="open_teaching"):
+        _switch_to(PAGES["Teaching Material"], "Opened Teaching Material", "Teaching Material")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =========================
+# WHAT TO DO NEXT (CLEARER THAN “SESSION PLAN / LIBRARY”)
+# =========================
+left, right = st.columns([1.25, 0.75], gap="large")
+
+with left:
+    st.markdown('<div class="section">', unsafe_allow_html=True)
+    st.subheader("Quick start (recommended)")
+    st.write(
+        "Use this if you want a simple, predictable tutoring flow:\n\n"
+        "1) Open **Policy Lab** and run one experiment (baseline + one shock).\n"
+        "2) Export the CSV for notes or follow-up exercises.\n"
+        "3) Open **Teaching Material** to assign a short deck/worksheet for reinforcement."
+    )
+    st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
+
+    st.markdown("### Choose a topic (optional)")
     topic = st.selectbox(
-        "Topic",
+        "Topic focus",
         [
-            "Monetary policy — Taylor rule",
-            "Fiscal policy — multipliers",
-            "Debt dynamics — sustainability",
-            "Growth & development — institutions",
-            "Trade — tariffs & incidence",
+            "Monetary policy (Taylor rule)",
+            "Fiscal policy (multipliers)",
+            "Debt dynamics (sustainability)",
+            "Growth & development (institutions)",
+            "Trade (tariffs & incidence)",
         ],
         index=0,
         label_visibility="visible",
     )
-with c2:
-    level = st.selectbox("Level", ["High school", "Undergraduate", "Advanced"], index=1)
-with c3:
-    minutes = st.selectbox("Minutes", [30, 45, 60, 75, 90], index=2)
-with c4:
-    format_ = st.selectbox("Format", ["1:1 tutoring", "Small group", "Classroom"], index=0)
-with c5:
-    output = st.selectbox("Output", ["Session plan", "Plan + handout checklist"], index=0)
 
-# =========================
-# MAIN BODY: two columns
-# =========================
-left, right = st.columns([1.55, 1.0], gap="large")
+    level = st.selectbox("Audience level", ["High school", "Undergraduate", "Advanced"], index=1)
+    minutes = st.select_slider("Time available", options=[30, 45, 60, 75, 90], value=60)
 
-TEMPLATES = {
-    "Monetary policy — Taylor rule": [
-        ("Warm-up (10 min)", "Define inflation vs target; output gap; why a rule exists."),
-        ("Lab (25–35 min)", "Run 2 shocks (demand vs supply). Compare φπ and smoothing."),
-        ("Synthesis (10 min)", "Decompose the implied rate into base + inflation gap + output gap."),
-        ("Exit ticket (5 min)", "One question: when can the rule become destabilizing?"),
-    ],
-    "Fiscal policy — multipliers": [
-        ("Warm-up (10 min)", "Multiplier intuition: MPC, leakages, slack vs capacity."),
-        ("Lab (25–35 min)", "Temporary spending shock under different MPC / openness."),
-        ("Synthesis (10 min)", "State-dependence: why multipliers differ across cycles."),
-        ("Exit ticket (5 min)", "Who benefits first, and who pays later?"),
-    ],
-    "Debt dynamics — sustainability": [
-        ("Warm-up (10 min)", "Debt/GDP identity; r−g; primary balance."),
-        ("Lab (25–35 min)", "Simulate debt paths under r>g vs r<g; add a growth shock."),
-        ("Synthesis (10 min)", "Interpret sustainability vs liquidity; what policy levers matter."),
-        ("Exit ticket (5 min)", "What variable is most dangerous to mis-estimate?"),
-    ],
-    "Growth & development — institutions": [
-        ("Warm-up (10 min)", "Development beyond GDP; institutions; state capacity."),
-        ("Lab (25–35 min)", "Mechanism: poverty trap; intervention logic; measurement risks."),
-        ("Synthesis (10 min)", "Evidence discipline: identification and external validity."),
-        ("Exit ticket (5 min)", "What would falsify the intervention story?"),
-    ],
-    "Trade — tariffs & incidence": [
-        ("Warm-up (10 min)", "Surplus, incidence, deadweight loss."),
-        ("Lab (25–35 min)", "Tariff incidence with elasticities; small vs large country."),
-        ("Synthesis (10 min)", "Distributional effects and second-round supply-chain impacts."),
-        ("Exit ticket (5 min)", "Who pays: consumers, producers, or foreigners?"),
-    ],
-}
+    # Ultra-plain explanation: what this does
+    st.caption("This simply pre-fills a suggested flow so you can teach consistently. It does not change any models.")
 
-with left:
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("Session plan")
-    st.caption(f"{minutes} minutes · {format_} · {level}")
+    flows = {
+        "Monetary policy (Taylor rule)": [
+            ("Warm-up", "Define inflation vs target; interpret output gap; why a rule exists."),
+            ("Experiment", "Run baseline, then supply vs demand shock; compare φπ and smoothing."),
+            ("Wrap", "Explain decomposition: base + inflation gap response + output gap response."),
+        ],
+        "Fiscal policy (multipliers)": [
+            ("Warm-up", "Multiplier intuition: MPC, leakages, slack vs capacity."),
+            ("Experiment", "Temporary spending shock under different MPC / openness assumptions."),
+            ("Wrap", "State dependence: why multipliers differ across cycles."),
+        ],
+        "Debt dynamics (sustainability)": [
+            ("Warm-up", "Debt identity; r−g; primary balance."),
+            ("Experiment", "Simulate r>g vs r<g; add a growth shock; interpret path."),
+            ("Wrap", "Sustainability vs liquidity; what levers matter."),
+        ],
+        "Growth & development (institutions)": [
+            ("Warm-up", "Development beyond GDP; institutions; state capacity."),
+            ("Experiment", "Mechanism walkthrough: poverty trap + measurement pitfalls."),
+            ("Wrap", "Evidence discipline: identification + external validity."),
+        ],
+        "Trade (tariffs & incidence)": [
+            ("Warm-up", "Surplus, incidence, deadweight loss."),
+            ("Experiment", "Tariff incidence with elasticities; small vs large country."),
+            ("Wrap", "Distributional effects and second-round impacts."),
+        ],
+    }
 
-    for title, body in TEMPLATES[topic]:
-        st.markdown(f"""
-        <div class="step">
-          <div style="font-weight:700; color: var(--text);">{title}</div>
-          <div class="smallmuted">{body}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    if output == "Plan + handout checklist":
-        st.markdown("<hr/>", unsafe_allow_html=True)
-        st.markdown("**Handout checklist**")
-        st.write(
-            "- Assumptions stated (units, baseline values)\n"
-            "- One chart showing the mechanism\n"
-            "- One sensitivity check\n"
-            "- One takeaway sentence (student writes it)\n"
-            "- Optional: CSV export for tutor notes"
-        )
-
-    st.markdown("<hr/>", unsafe_allow_html=True)
-
-    b1, b2 = st.columns(2, gap="medium")
-    with b1:
-        if st.button("Open Policy Lab", use_container_width=True):
-            _switch_to(PAGES["Policy Lab"], f"{topic} · {minutes}m", "Policy Lab")
-    with b2:
-        if st.button("Open Teaching Material", use_container_width=True):
-            _switch_to(PAGES["Teaching Material"], f"{topic} · {minutes}m", "Teaching Material")
+    st.markdown("### Suggested flow")
+    plan = flows[topic]
+    for i, (t, desc) in enumerate(plan, start=1):
+        st.markdown(f"**{i}. {t}** — {desc}")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 with right:
-    # Library search (simple but useful)
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("Library")
-    q = st.text_input("Search (e.g., “Taylor”, “debt”, “tariff”)", value="")
-    filter_ = st.selectbox("Filter", ["All", "Policy Lab", "Teaching Material"], index=0)
-
-    items = [
-        {"title": "Taylor Rule Toy Model", "type": "Policy Lab", "hint": "Monetary policy mechanics; shocks; decomposition"},
-        {"title": "Fiscal Multiplier Lab", "type": "Policy Lab", "hint": "MPC, leakages, state dependence"},
-        {"title": "Debt Dynamics Lab", "type": "Policy Lab", "hint": "r−g, primary balance, stress tests"},
-        {"title": "Development Econ Deck", "type": "Teaching Material", "hint": "Poverty, institutions, evidence"},
-        {"title": "Trade & Tariffs Deck", "type": "Teaching Material", "hint": "Incidence, welfare, distribution"},
-    ]
-
-    q_low = q.strip().lower()
-    shown = []
-    for it in items:
-        if filter_ != "All" and it["type"] != filter_:
-            continue
-        if q_low and (q_low not in it["title"].lower()) and (q_low not in it["hint"].lower()):
-            continue
-        shown.append(it)
-
-    if not shown:
-        st.caption("No results. Try a broader query.")
-    else:
-        for it in shown:
-            st.markdown(f"**{it['title']}**  \n<span class='smallmuted'>{it['type']} · {it['hint']}</span>", unsafe_allow_html=True)
-            st.markdown("---")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Recent activity
     st.markdown('<div class="section">', unsafe_allow_html=True)
     st.subheader("Recent")
+    st.caption("Shows what you opened from the home page (local session only).")
+
     if len(st.session_state.home_recent) == 0:
-        st.caption("Nothing yet. Launch a lab or deck from the left.")
+        st.markdown('<div class="secondary-note">Nothing yet. Use the blue buttons above.</div>', unsafe_allow_html=True)
     else:
         for r in st.session_state.home_recent:
             st.markdown(f"**{r['label']}**  \n<span class='smallmuted'>{r['page']} · {r['ts']}</span>", unsafe_allow_html=True)
-            st.markdown("---")
-        if st.button("Clear recent", use_container_width=True):
+            st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
+
+        if st.button("Clear recent", use_container_width=True, key="clear_recent"):
             st.session_state.home_recent = []
             st.rerun()
+
     st.markdown('</div>', unsafe_allow_html=True)
 
+# =========================
+# FOOTER
+# =========================
+st.markdown("")
 st.caption("© Chaouat Economics Lab · Built with Python/Streamlit · Educational use only")
