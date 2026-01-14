@@ -1200,6 +1200,7 @@ else:
     }[metric_mode]
 
     leftc, rightc = st.columns(2, gap="large")
+    run_id = st.session_state.scan_run_id
 
     with leftc:
         st.markdown(f"**{title_top}**")
@@ -1207,15 +1208,14 @@ else:
         fig_top.update_traces(textposition="outside")
         fig_top.update_layout(height=360, margin=dict(l=60, r=10, t=30, b=60), showlegend=False)
         fig_top.update_xaxes(showticklabels=True)
-        st.plotly_chart(fig_top, use_container_width=True)
-
+        st.plotly_chart(fig_top, use_container_width=True, key=f"leaders_chart_{run_id}")
     with rightc:
         st.markdown(f"**{title_bot}**")
         fig_bot = px.bar(botN, x="Ticker", y="Value", text="Label")
         fig_bot.update_traces(textposition="outside")
         fig_bot.update_layout(height=360, margin=dict(l=60, r=10, t=30, b=60), showlegend=False)
         fig_bot.update_xaxes(showticklabels=True)
-        st.plotly_chart(fig_bot, use_container_width=True)
+        st.plotly_chart(fig_bot, use_container_width=True, key=f"laggards_chart_{run_id}")
 
 
 
@@ -1235,6 +1235,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
