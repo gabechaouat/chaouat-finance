@@ -1075,6 +1075,9 @@ with st.container(border=True):
 # === TOP / BOTTOM VOLATILITY (FAST MODE: run only on click) ===
 # === TOP / BOTTOM (stable: does NOT disappear on reruns) ===
 st.subheader("Leaders and laggards")
+# Unique id for each scan run (prevents Streamlit duplicate element errors)
+if "scan_run_id" not in st.session_state:
+    st.session_state.scan_run_id = 0
 
 # --- Remember the last successful scan so charts stay visible on reruns ---
 if "last_scan_df" not in st.session_state:
@@ -1231,6 +1234,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
