@@ -231,3 +231,4 @@ with st.expander("How to use these resources (tutoring workflow)", expanded=Fals
         "- In the next session, rerun the Policy Lab module with a shock/sensitivity to test understanding.\n"
         "- Close with a 3-question recap: definition, mechanism, and one numerical intuition."
     )
+st.caption("© Chaouat Economics Lab ...")
