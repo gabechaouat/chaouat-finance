@@ -116,15 +116,24 @@ for i, filename in enumerate(pdfs):
         st.markdown('<div class="deck-card">', unsafe_allow_html=True)
 
         # Preview placeholder (clean + minimal). If you later add thumbnails, replace this area.
-        st.markdown(f"""
-          <div class="preview-box">
-            PDF Preview<br/>
-            <span style="font-size:11px;">(optional cover image can go here)</span>
-          </div>
-        """, unsafe_allow_html=True)
+        cover_png = os.path.join(MATERIALS_DIR, "covers", filename.replace(".pdf", ".png"))
+        cover_jpg = os.path.join(MATERIALS_DIR, "covers", filename.replace(".pdf", ".jpg"))
+        cover_jpeg = os.path.join(MATERIALS_DIR, "covers", filename.replace(".pdf", ".jpeg"))
 
-        st.markdown(f'<div class="deck-title">{title}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="deck-meta">{size_kb} KB · PDF</div>', unsafe_allow_html=True)
+        if os.path.exists(cover_png):
+          st.image(cover_png, use_container_width=True)
+        elif os.path.exists(cover_jpg):
+          st.image(cover_jpg, use_container_width=True)
+        elif os.path.exists(cover_jpeg):
+          st.image(cover_jpeg, use_container_width=True)
+        else:
+          st.markdown(f"""
+            <div class="preview-box">
+              No cover image found<br/>
+              <span style="font-size:11px;">Add: materials/covers/{filename.replace(".pdf",".png")}</span>
+            </div>
+          """, unsafe_allow_html=True)
+
 
         # Buttons: View + Download
         c1, c2 = st.columns(2)
