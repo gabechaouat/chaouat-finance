@@ -8,6 +8,7 @@ import streamlit as st
 import yfinance as yf
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+import time
 
 def get_query_params():
     try:
@@ -663,8 +664,10 @@ except Exception:
 if "panel_refresh_count" not in st.session_state:
     st.session_state.panel_refresh_count = -1
 
-# Auto-advance every 10 seconds
-if st_autorefresh is not None:
+# Auto-advance every 10 seconds (but pause during heavy actions like scans)
+pause_until = st.session_state.get("pause_autorefresh_until", 0.0)
+
+if st_autorefresh is not None and time.time() >= pause_until:
     count = st_autorefresh(interval=10_000, key="rotating_info_panel")
     if count != st.session_state.panel_refresh_count:
         st.session_state.panel_idx = (st.session_state.panel_idx + 1) % len(PANELS)
@@ -1115,6 +1118,9 @@ with st.form("scan_form", clear_on_submit=False):
 
 # If user clicked Run scan, compute and SAVE results
 if run_scan_now:
+    # Pause auto-refresh for 90 seconds so the scan is not interrupted
+    st.session_state.pause_autorefresh_until = time.time() + 90
+
     if sector_choice == "All":
         universe = sp500["Symbol"].dropna().unique().tolist()
     else:
@@ -1128,15 +1134,18 @@ if run_scan_now:
     with st.spinner(f"Scanning {metric_mode.lower()} across the {scope}..."):
         scan_df = scan_cross_section(metric_mode, universe, lookback_days, use_log_returns)
 
-    # Save for future reruns (so charts don't disappear)
-    st.session_state.last_scan_df = scan_df
-    st.session_state.last_scan_meta = {
-        "metric_mode": metric_mode,
-        "top_n": top_n,
-        "sector_choice": sector_choice,
-        "lookback_days": lookback_days,
-        "scope": scope,
-    }
+    # IMPORTANT: only overwrite the saved results if we actually got data
+    if scan_df is not None and not scan_df.empty:
+        st.session_state.last_scan_df = scan_df
+        st.session_state.last_scan_meta = {
+            "metric_mode": metric_mode,
+            "top_n": top_n,
+            "sector_choice": sector_choice,
+            "lookback_days": lookback_days,
+            "scope": scope,
+        }
+    else:
+        st.warning("The scan returned no data (Yahoo sometimes rate-limits). Try again, or select a smaller sector.")
 
 # If we still have no saved scan, show instructions and DO NOT stop the page
 if st.session_state.last_scan_df is None or st.session_state.last_scan_df.empty:
@@ -1222,6 +1231,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
