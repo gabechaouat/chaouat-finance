@@ -1114,7 +1114,7 @@ with st.form("scan_form", clear_on_submit=False):
 
 # Do nothing until user clicks
 if not run_scan_now:
-    st.info("Adjust settings above, then click **Run scan**. (This prevents slow recomputation.)")
+    st.info("Adjust settings above, then click **Run scan**.")
     st.stop()
 
 # Universe filtered by sector selection
@@ -1208,6 +1208,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
