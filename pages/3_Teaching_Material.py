@@ -114,7 +114,7 @@ cols = st.columns(3, gap="large")
 
 for i, filename in enumerate(pdfs):
     path = os.path.join(MATERIALS_DIR, filename)
-    size_kb = int(os.path.getsize(path) / 1024)
+    size_kb = human_kb(path)
 
     # For display
     title = filename.replace(".pdf", "").replace("_", " ").replace("-", " ")
@@ -148,8 +148,7 @@ for i, filename in enumerate(pdfs):
             # "View" in Streamlit: show inline embed below when clicked
             view = st.button("View", key=f"view_{filename}")
         with c2:
-            with open(path, "rb") as f:
-                data = f.read()
+            data = read_file_bytes(path)
             st.download_button(
                 "Download",
                 data=data,
