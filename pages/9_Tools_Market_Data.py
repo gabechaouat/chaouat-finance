@@ -1123,6 +1123,7 @@ with st.form("scan_form", clear_on_submit=False):
 if run_scan_now:
     # Pause auto-refresh for 90 seconds so the scan is not interrupted
     st.session_state.pause_autorefresh_until = time.time() + 90
+    st.session_state.scan_run_id += 1
 
     if sector_choice == "All":
         universe = sp500["Symbol"].dropna().unique().tolist()
@@ -1234,6 +1235,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
