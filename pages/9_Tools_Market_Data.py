@@ -1069,11 +1069,11 @@ with st.container(border=True):
 
 
 
-# === TOP / BOTTOM VOLATILITY ===
-if run_scan:
-    st.subheader("Leaders and laggards")
+# === TOP / BOTTOM VOLATILITY (FAST MODE: run only on click) ===
+st.subheader("Leaders and laggards")
 
-    # ---------- Controls shown ABOVE the charts ----------
+# Put the controls in a form so changing sliders DOES NOT rerun the expensive scan
+with st.form("scan_form", clear_on_submit=False):
     metrics_list = [
         "Volatility",
         "Price change",
@@ -1085,6 +1085,7 @@ if run_scan:
         "Sharpe (1y)",
         "Beta vs S&P 500",
     ]
+
     c1, c2, c3 = st.columns([1.1, 1.0, 1.2])
     with c1:
         metric_mode = st.selectbox("Metric", metrics_list, help="Pick a cross-sectional metric.")
@@ -1098,7 +1099,7 @@ if run_scan:
             help="Filter the universe to a single sector."
         )
 
-    # A single lookback control only for metrics that use it
+    # Lookback only when it matters
     if metric_mode in ["Volatility", "Price change"]:
         lookback_days = st.slider(
             "Lookback (trading days)",
@@ -1106,127 +1107,88 @@ if run_scan:
             help="Window used for the chosen metric."
         )
     else:
-        lookback_days = 60  # not used for others; scanner will use sensible windows
+        lookback_days = 60  # scanner uses a sensible internal window
 
+    # IMPORTANT: only compute when this is pressed
+    run_scan_now = st.form_submit_button("Run scan")
 
+# Do nothing until user clicks
+if not run_scan_now:
+    st.info("Adjust settings above, then click **Run scan**. (This prevents slow recomputation.)")
+    st.stop()
 
-    # compute bar width that shrinks as N grows (clamped)
-    bar_w = max(0.15, min(0.8, 8.0 / top_n))
+# Universe filtered by sector selection
+if sector_choice == "All":
+    universe = sp500["Symbol"].dropna().unique().tolist()
+else:
+    universe = (
+        sp500.loc[sp500["Sector"] == sector_choice, "Symbol"]
+        .dropna().unique().tolist()
+    )
 
-    # Universe filtered by sector selection
-    if sector_choice == "All":
-        universe = sp500["Symbol"].dropna().unique().tolist()
-    else:
-        universe = (
-            sp500.loc[sp500["Sector"] == sector_choice, "Symbol"]
-            .dropna().unique().tolist()
-        )
+scope = "S&P 500" if sector_choice == "All" else f"{sector_choice} sector"
+with st.spinner(f"Scanning {metric_mode.lower()} across the {scope}..."):
+    scan_df = scan_cross_section(metric_mode, universe, lookback_days, use_log_returns)
 
+if scan_df.empty:
+    st.info("Not enough data to compute this cross-section.")
+else:
+    # Ranking rules
+    desc_top = metric_mode not in ["Max drawdown", "Distance to 52W high"]
 
-    scope = "S&P 500" if sector_choice == "All" else f"{sector_choice} sector"
-    with st.spinner(f"Scanning {metric_mode.lower()} across the {scope}..."):
-        scan_df = scan_cross_section(metric_mode, universe, lookback_days, use_log_returns)
+    pct_metrics = {
+        "Volatility", "Price change", "YTD return", "52W change",
+        "Max drawdown", "Distance to 52W high"
+    }
+    fmt = (lambda x: f"{x*100:.2f}%") if metric_mode in pct_metrics else (lambda x: f"{x:.2f}")
 
-    if scan_df.empty:
-        st.info("Not enough data to compute this cross-section.")
-    else:
-        # How to rank
-        # For these metrics, "higher is better" (top list is descending):
-        desc_top = metric_mode not in ["Max drawdown", "Distance to 52W high"]
-        # Text formatting
-        pct_metrics = {"Volatility", "Price change", "YTD return", "52W change", "Max drawdown", "Distance to 52W high"}
-        fmt = (lambda x: f"{x*100:.2f}%") if metric_mode in pct_metrics else (lambda x: f"{x:.2f}")
+    topN = scan_df.sort_values("Value", ascending=not desc_top).head(top_n).copy()
+    botN = scan_df.sort_values("Value", ascending=desc_top).head(top_n).copy()
 
-        # Top and bottom frames
-        topN = scan_df.sort_values("Value", ascending=not desc_top).head(top_n).copy()
-        botN = scan_df.sort_values("Value", ascending=desc_top).head(top_n).copy()
+    topN["Label"] = topN["Value"].apply(fmt)
+    botN["Label"] = botN["Value"].apply(fmt)
 
-        topN["Label"] = topN["Value"].apply(fmt)
-        botN["Label"] = botN["Value"].apply(fmt)
+    title_top = {
+        "Volatility": "Highest volatility",
+        "Price change": "Top gainers",
+        "YTD return": "Top YTD",
+        "52W change": "Top 52-week change",
+        "Max drawdown": "Smallest drawdown",
+        "RSI (14)": "Highest RSI (14)",
+        "Distance to 52W high": "Closest to 52W high",
+        "Sharpe (1y)": "Highest Sharpe (1y)",
+        "Beta vs S&P 500": "Highest Beta",
+    }[metric_mode]
+    title_bot = {
+        "Volatility": "Lowest volatility",
+        "Price change": "Top losers",
+        "YTD return": "Lowest YTD",
+        "52W change": "Lowest 52-week change",
+        "Max drawdown": "Largest drawdown",
+        "RSI (14)": "Lowest RSI (14)",
+        "Distance to 52W high": "Furthest from 52W high",
+        "Sharpe (1y)": "Lowest Sharpe (1y)",
+        "Beta vs S&P 500": "Lowest Beta",
+    }[metric_mode]
 
-        # Titles that read naturally per metric
-        title_top = {
-            "Volatility": "Highest volatility",
-            "Price change": "Top gainers",
-            "YTD return": "Top YTD",
-            "52W change": "Top 52-week change",
-            "Max drawdown": "Smallest drawdown",
-            "RSI (14)": "Highest RSI (14)",
-            "Distance to 52W high": "Closest to 52W high",
-            "Sharpe (1y)": "Highest Sharpe (1y)",
-            "Beta vs S&P 500": "Highest Beta",
-        }[metric_mode]
-        title_bot = {
-            "Volatility": "Lowest volatility",
-            "Price change": "Top losers",
-            "YTD return": "Lowest YTD",
-            "52W change": "Lowest 52-week change",
-            "Max drawdown": "Largest drawdown",
-            "RSI (14)": "Lowest RSI (14)",
-            "Distance to 52W high": "Furthest from 52W high",
-            "Sharpe (1y)": "Lowest Sharpe (1y)",
-            "Beta vs S&P 500": "Lowest Beta",
-        }[metric_mode]
+    leftc, rightc = st.columns(2, gap="large")
 
-        # Bar width that shrinks as N grows (clamped)
-        bar_w = max(0.15, min(0.8, 8.0 / top_n))
-        leftc, rightc = st.columns(2, gap="large")
+    import plotly.express as px
+    with leftc:
+        st.markdown(f"**{title_top}**")
+        fig_top = px.bar(topN, x="Ticker", y="Value", text="Label")
+        fig_top.update_traces(textposition="outside")
+        fig_top.update_layout(height=360, margin=dict(l=60, r=10, t=30, b=60), showlegend=False)
+        fig_top.update_xaxes(showticklabels=False)
+        st.plotly_chart(fig_top, use_container_width=True)
 
-        with leftc:
-            st.markdown(f"**{title_top}**")
-            fig_top = px.bar(topN, x="Ticker", y="Value", text="Label")
-            fig_top.update_traces(
-                width=bar_w,
-                marker_color=px.colors.sequential.Blues[-5:][:len(topN)],
-                textposition="outside",
-                textfont=dict(size=12),
-                hovertemplate="<b>%{x}</b><br>Value: %{y:.4f}<extra></extra>",
-            )
-            fig_top.update_layout(
-                xaxis_title="",
-                yaxis_title=metric_mode,
-                bargap=0.25,
-                height=360,
-                margin=dict(l=60, r=10, t=30, b=60),
-                showlegend=False,
-            )
-            fig_top.update_xaxes(showticklabels=False)
-            for x in topN["Ticker"]:
-                fig_top.add_annotation(
-                    x=x, xref="x", y=-0.18, yref="paper",
-                    text=f"<a href='?sym={x}'>{x}</a>",
-                    showarrow=False, align="center",
-                    font=dict(color="#005F7D", size=12)
-                )
-            st.plotly_chart(fig_top, use_container_width=True)
-
-        with rightc:
-            st.markdown(f"**{title_bot}**")
-            fig_bot = px.bar(botN, x="Ticker", y="Value", text="Label")
-            fig_bot.update_traces(
-                width=bar_w,
-                marker_color=px.colors.sequential.Blues[2:7][:len(botN)],
-                textposition="outside",
-                textfont=dict(size=12),
-                hovertemplate="<b>%{x}</b><br>Value: %{y:.4f}<extra></extra>",
-            )
-            fig_bot.update_layout(
-                xaxis_title="",
-                yaxis_title=metric_mode,
-                bargap=0.25,
-                height=360,
-                margin=dict(l=60, r=10, t=30, b=60),
-                showlegend=False,
-            )
-            fig_bot.update_xaxes(showticklabels=False)
-            for x in botN["Ticker"]:
-                fig_bot.add_annotation(
-                    x=x, xref="x", y=-0.18, yref="paper",
-                    text=f"<a href='?sym={x}'>{x}</a>",
-                    showarrow=False, align="center",
-                    font=dict(color="#005F7D", size=12)
-                )
-            st.plotly_chart(fig_bot, use_container_width=True)
+    with rightc:
+        st.markdown(f"**{title_bot}**")
+        fig_bot = px.bar(botN, x="Ticker", y="Value", text="Label")
+        fig_bot.update_traces(textposition="outside")
+        fig_bot.update_layout(height=360, margin=dict(l=60, r=10, t=30, b=60), showlegend=False)
+        fig_bot.update_xaxes(showticklabels=False)
+        st.plotly_chart(fig_bot, use_container_width=True)
 
 
 
@@ -1246,6 +1208,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
