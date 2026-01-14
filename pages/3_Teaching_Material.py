@@ -174,3 +174,60 @@ for i, filename in enumerate(pdfs):
             )
 
         st.markdown('</div>', unsafe_allow_html=True)
+# =========================
+# Suggested resources (below presentations)
+# =========================
+st.markdown("---")
+st.subheader("Suggested resources")
+st.caption("Optional practice and background material to reinforce the decks. External links open in a new tab.")
+
+# Topic selector to avoid dumping a long list on the user
+topic = st.selectbox(
+    "Choose a topic",
+    [
+        "Microeconomics",
+        "Macroeconomics",
+        "Finance & Capital Markets",
+        "Statistics & Econometrics foundations",
+    ],
+    index=1,
+)
+
+resources = {
+    "Microeconomics": [
+        ("Khan Academy — Microeconomics (course)", "https://www.khanacademy.org/economics-finance-domain/microeconomics"),
+        ("Khan Academy — Supply, demand, and market equilibrium", "https://www.khanacademy.org/economics-finance-domain/microeconomics/supply-demand-equilibrium"),
+        ("Khan Academy — Consumer and producer surplus", "https://www.khanacademy.org/economics-finance-domain/microeconomics/consumer-producer-surplus"),
+        ("Khan Academy — Elasticity", "https://www.khanacademy.org/economics-finance-domain/microeconomics/elasticity-topic"),
+    ],
+    "Macroeconomics": [
+        ("Khan Academy — Macroeconomics (course)", "https://www.khanacademy.org/economics-finance-domain/macroeconomics"),
+        ("Khan Academy — Inflation and price indices", "https://www.khanacademy.org/economics-finance-domain/macroeconomics/inflation-topic"),
+        ("Khan Academy — Monetary policy and central banking", "https://www.khanacademy.org/economics-finance-domain/macroeconomics/monetary-system-topic"),
+        ("Khan Academy — Fiscal policy", "https://www.khanacademy.org/economics-finance-domain/macroeconomics/fiscal-policy-topic"),
+    ],
+    "Finance & Capital Markets": [
+        ("Khan Academy — Finance & capital markets (course)", "https://www.khanacademy.org/economics-finance-domain/core-finance"),
+        ("Khan Academy — Time value of money", "https://www.khanacademy.org/economics-finance-domain/core-finance/interest-tutorial"),
+        ("Khan Academy — Bonds and interest rates", "https://www.khanacademy.org/economics-finance-domain/core-finance/stock-and-bonds"),
+        ("Khan Academy — Risk and return", "https://www.khanacademy.org/economics-finance-domain/core-finance/risk-tutorial"),
+    ],
+    "Statistics & Econometrics foundations": [
+        ("Khan Academy — Statistics and probability (course)", "https://www.khanacademy.org/math/statistics-probability"),
+        ("Khan Academy — Regression (intro)", "https://www.khanacademy.org/math/statistics-probability/describing-relationships-quantitative-data"),
+        ("Khan Academy — Sampling distributions & CLT", "https://www.khanacademy.org/math/statistics-probability/sampling-distributions-library"),
+        ("Khan Academy — Confidence intervals & hypothesis testing", "https://www.khanacademy.org/math/statistics-probability/confidence-intervals-one-sample"),
+    ],
+}
+
+st.markdown("### Khan Academy")
+for label, url in resources[topic]:
+    st.link_button(label, url)
+
+with st.expander("How to use these resources (tutoring workflow)", expanded=False):
+    st.write(
+        "- Use the deck first (conceptual framing).\n"
+        "- Assign 20–40 minutes of Khan Academy practice targeting the weakest subtopic.\n"
+        "- In the next session, rerun the Policy Lab module with a shock/sensitivity to test understanding.\n"
+        "- Close with a 3-question recap: definition, mechanism, and one numerical intuition."
+    )
