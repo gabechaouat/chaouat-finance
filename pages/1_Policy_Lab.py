@@ -215,7 +215,41 @@ with colB:
     fig.update_xaxes(title_text="Months (scenario)")
     fig.update_yaxes(title_text="Percent (%)")
     st.plotly_chart(fig, use_container_width=True)
+    with st.expander("Decomposition: what drives the implied rate?", expanded=False):
+        df_decomp = df.copy()
+        df_decomp["Base (r* + π*)"] = r_star + pi_target
+        df_decomp["Inflation-gap contrib"] = phi_pi * (df_decomp["Inflation path (assumed, %)"] - pi_target)
+        df_decomp["Output-gap contrib"] = phi_y * (df_decomp["Output gap path (assumed, %)"])
+        df_decomp["Implied i (no smoothing)"] = (
+            df_decomp["Base (r* + π*)"]
+            + df_decomp["Inflation-gap contrib"]
+            + df_decomp["Output-gap contrib"]
+        )
 
+        c0 = df_decomp.loc[0, ["Base (r* + π*)", "Inflation-gap contrib", "Output-gap contrib", "Implied i (no smoothing)"]]
+        st.write(
+            f"Month 0 decomposition (no smoothing): "
+            f"Base **{c0['Base (r* + π*)']:.2f}** + "
+            f"Inflation-gap **{c0['Inflation-gap contrib']:.2f}** + "
+            f"Output-gap **{c0['Output-gap contrib']:.2f}** "
+            f"= **{c0['Implied i (no smoothing)']:.2f}%**"
+        )
+
+        fig_d = go.Figure()
+        fig_d.add_trace(go.Scatter(x=df_decomp["Month"], y=df_decomp["Base (r* + π*)"], mode="lines", name="Base (r* + π*)"))
+        fig_d.add_trace(go.Scatter(x=df_decomp["Month"], y=df_decomp["Inflation-gap contrib"], mode="lines", name="Inflation-gap contrib"))
+        fig_d.add_trace(go.Scatter(x=df_decomp["Month"], y=df_decomp["Output-gap contrib"], mode="lines", name="Output-gap contrib"))
+        fig_d.add_trace(go.Scatter(x=df_decomp["Month"], y=df_decomp["Implied i (no smoothing)"], mode="lines", name="Implied i (no smoothing)"))
+
+        fig_d.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10), legend=dict(orientation="h", y=1.02, x=0))
+        fig_d.update_xaxes(title_text="Months (scenario)")
+        fig_d.update_yaxes(title_text="Percent (%)")
+        st.plotly_chart(fig_d, use_container_width=True)
+
+        st.dataframe(
+            df_decomp[["Month", "Base (r* + π*)", "Inflation-gap contrib", "Output-gap contrib", "Implied i (no smoothing)", "Policy rate (illustrative, %)"]],
+            use_container_width=True,
+        )
     st.markdown("### Interpretation (teaching-oriented)")
     st.write(
         f"- Under these parameters, the rule implies an initial nominal policy rate around **{i_star:.2f}%**.\n"
@@ -227,3 +261,76 @@ st.divider()
 st.markdown("### Export (for tutors)")
 csv = df.to_csv(index=False).encode("utf-8")
 st.download_button("Download scenario CSV", data=csv, file_name="policy_lab_monetary_scenario.csv", mime="text/csv")
+st.markdown("### Save & compare runs")
+
+colS1, colS2, colS3 = st.columns([1.2, 1.0, 1.3], gap="medium")
+
+with colS1:
+    run_label = st.text_input("Run label", value=f"π={pi:.1f}, ỹ={y_gap:.1f}, φπ={phi_pi:.1f}, φy={phi_y:.1f}, s={smoothing:.2f}")
+    if st.button("Save this run", use_container_width=True):
+        st.session_state.policy_lab_runs.append({
+            "label": run_label,
+            "params": {
+                "r_star": r_star, "pi_target": pi_target, "phi_pi": phi_pi, "phi_y": phi_y,
+                "pi": pi, "y_gap": y_gap, "smoothing": smoothing, "horizon": horizon,
+                # shocks (if present)
+                "preset": locals().get("preset", "Custom"),
+                "pi_shock_kind": locals().get("pi_shock_kind", "None"),
+                "pi_shock_start": locals().get("pi_shock_start", 0),
+                "pi_shock_size": locals().get("pi_shock_size", 0.0),
+                "pi_shock_duration": locals().get("pi_shock_duration", 1),
+                "pi_shock_rho": locals().get("pi_shock_rho", 0.0),
+                "y_shock_kind": locals().get("y_shock_kind", "None"),
+                "y_shock_start": locals().get("y_shock_start", 0),
+                "y_shock_size": locals().get("y_shock_size", 0.0),
+                "y_shock_duration": locals().get("y_shock_duration", 1),
+                "y_shock_rho": locals().get("y_shock_rho", 0.0),
+            },
+            "df": df.copy(),
+        })
+        st.success("Run saved.")
+
+with colS2:
+    if st.button("Clear saved runs", use_container_width=True):
+        st.session_state.policy_lab_runs = []
+        st.info("Saved runs cleared.")
+
+with colS3:
+    st.write(f"Saved runs: **{len(st.session_state.policy_lab_runs)}**")
+    if len(st.session_state.policy_lab_runs) > 0:
+        # Build a combined dataframe for download
+        combined = []
+        for idx, run in enumerate(st.session_state.policy_lab_runs):
+            tmp = run["df"].copy()
+            tmp["Run"] = run["label"]
+            tmp["Run #"] = idx + 1
+            combined.append(tmp)
+        combined_df = pd.concat(combined, ignore_index=True)
+        combined_csv = combined_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Download ALL runs (combined CSV)",
+            data=combined_csv,
+            file_name="policy_lab_saved_runs.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+if len(st.session_state.policy_lab_runs) > 0:
+    with st.expander("View saved runs (latest first)", expanded=False):
+        meta_rows = []
+        for idx, run in enumerate(reversed(st.session_state.policy_lab_runs)):
+            p = run["params"]
+            meta_rows.append({
+                "Saved order (latest=1)": idx + 1,
+                "Label": run["label"],
+                "π": p["pi"],
+                "ỹ": p["y_gap"],
+                "r*": p["r_star"],
+                "π*": p["pi_target"],
+                "φπ": p["phi_pi"],
+                "φy": p["phi_y"],
+                "smoothing": p["smoothing"],
+                "horizon": p["horizon"],
+                "preset": p.get("preset", "Custom"),
+            })
+        st.dataframe(pd.DataFrame(meta_rows), use_container_width=True)
