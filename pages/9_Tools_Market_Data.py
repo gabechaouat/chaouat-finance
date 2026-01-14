@@ -1070,9 +1070,16 @@ with st.container(border=True):
 
 
 # === TOP / BOTTOM VOLATILITY (FAST MODE: run only on click) ===
+# === TOP / BOTTOM (stable: does NOT disappear on reruns) ===
 st.subheader("Leaders and laggards")
 
-# Put the controls in a form so changing sliders DOES NOT rerun the expensive scan
+# --- Remember the last successful scan so charts stay visible on reruns ---
+if "last_scan_df" not in st.session_state:
+    st.session_state.last_scan_df = None
+if "last_scan_meta" not in st.session_state:
+    st.session_state.last_scan_meta = None
+
+# Put the controls in a form so moving sliders does not trigger a new scan
 with st.form("scan_form", clear_on_submit=False):
     metrics_list = [
         "Volatility",
@@ -1088,51 +1095,59 @@ with st.form("scan_form", clear_on_submit=False):
 
     c1, c2, c3 = st.columns([1.1, 1.0, 1.2])
     with c1:
-        metric_mode = st.selectbox("Metric", metrics_list, help="Pick a cross-sectional metric.")
+        metric_mode = st.selectbox("Metric", metrics_list)
     with c2:
-        top_n = st.slider("Top-N", 1, 50, 5, step=1, help="How many names to show.")
+        top_n = st.slider("Top-N", 1, 50, 5, step=1)
     with c3:
         sector_choice = st.selectbox(
             "Sector",
             ["All"] + sorted(sp500["Sector"].dropna().unique().tolist()),
-            index=0,
-            help="Filter the universe to a single sector."
+            index=0
         )
 
-    # Lookback only when it matters
+    # Only ask for lookback when it matters
     if metric_mode in ["Volatility", "Price change"]:
-        lookback_days = st.slider(
-            "Lookback (trading days)",
-            20, 252, 60,
-            help="Window used for the chosen metric."
-        )
+        lookback_days = st.slider("Lookback (trading days)", 20, 252, 60)
     else:
-        lookback_days = 60  # scanner uses a sensible internal window
+        lookback_days = 60
 
-    # IMPORTANT: only compute when this is pressed
     run_scan_now = st.form_submit_button("Run scan")
 
-# Do nothing until user clicks
-if not run_scan_now:
+# If user clicked Run scan, compute and SAVE results
+if run_scan_now:
+    if sector_choice == "All":
+        universe = sp500["Symbol"].dropna().unique().tolist()
+    else:
+        universe = (
+            sp500.loc[sp500["Sector"] == sector_choice, "Symbol"]
+            .dropna().unique().tolist()
+        )
+
+    scope = "S&P 500" if sector_choice == "All" else f"{sector_choice} sector"
+
+    with st.spinner(f"Scanning {metric_mode.lower()} across the {scope}..."):
+        scan_df = scan_cross_section(metric_mode, universe, lookback_days, use_log_returns)
+
+    # Save for future reruns (so charts don't disappear)
+    st.session_state.last_scan_df = scan_df
+    st.session_state.last_scan_meta = {
+        "metric_mode": metric_mode,
+        "top_n": top_n,
+        "sector_choice": sector_choice,
+        "lookback_days": lookback_days,
+        "scope": scope,
+    }
+
+# If we still have no saved scan, show instructions and DO NOT stop the page
+if st.session_state.last_scan_df is None or st.session_state.last_scan_df.empty:
     st.info("Adjust settings above, then click **Run scan**.")
-    st.stop()
-
-# Universe filtered by sector selection
-if sector_choice == "All":
-    universe = sp500["Symbol"].dropna().unique().tolist()
 else:
-    universe = (
-        sp500.loc[sp500["Sector"] == sector_choice, "Symbol"]
-        .dropna().unique().tolist()
-    )
+    # Use saved results
+    scan_df = st.session_state.last_scan_df
+    meta = st.session_state.last_scan_meta or {}
+    metric_mode = meta.get("metric_mode", "Volatility")
+    top_n = meta.get("top_n", 5)
 
-scope = "S&P 500" if sector_choice == "All" else f"{sector_choice} sector"
-with st.spinner(f"Scanning {metric_mode.lower()} across the {scope}..."):
-    scan_df = scan_cross_section(metric_mode, universe, lookback_days, use_log_returns)
-
-if scan_df.empty:
-    st.info("Not enough data to compute this cross-section.")
-else:
     # Ranking rules
     desc_top = metric_mode not in ["Max drawdown", "Distance to 52W high"]
 
@@ -1173,13 +1188,12 @@ else:
 
     leftc, rightc = st.columns(2, gap="large")
 
-    import plotly.express as px
     with leftc:
         st.markdown(f"**{title_top}**")
         fig_top = px.bar(topN, x="Ticker", y="Value", text="Label")
         fig_top.update_traces(textposition="outside")
         fig_top.update_layout(height=360, margin=dict(l=60, r=10, t=30, b=60), showlegend=False)
-        fig_top.update_xaxes(showticklabels=False)
+        fig_top.update_xaxes(showticklabels=True)
         st.plotly_chart(fig_top, use_container_width=True)
 
     with rightc:
@@ -1187,7 +1201,7 @@ else:
         fig_bot = px.bar(botN, x="Ticker", y="Value", text="Label")
         fig_bot.update_traces(textposition="outside")
         fig_bot.update_layout(height=360, margin=dict(l=60, r=10, t=30, b=60), showlegend=False)
-        fig_bot.update_xaxes(showticklabels=False)
+        fig_bot.update_xaxes(showticklabels=True)
         st.plotly_chart(fig_bot, use_container_width=True)
 
 
@@ -1208,6 +1222,7 @@ st.download_button(
 
 st.caption("Volatility should be computed on returns, not raw prices. 252 trading days used for annualization.")
 st.markdown('<div class="cf-foot">© Chaouat Finance · Built with Python</div>', unsafe_allow_html=True)
+
 
 
 
