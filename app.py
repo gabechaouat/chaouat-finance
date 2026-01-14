@@ -153,9 +153,7 @@ st.markdown(
   <div class="badge">HOME</div>
   <div class="cf-brand">Chaouat Economics Lab</div>
   <div class="cf-sub">
-    Two core areas:
-    <b>Policy Lab</b> (interactive models with explicit assumptions) and
-    <b>Teaching Material</b> (decks/handouts for tutoring & classroom use).
+    Educational platform where economics and policy concepts are turned into classroom-ready teaching materials.
   </div>
 </div>
 """,
@@ -190,7 +188,7 @@ left, right = st.columns([1.25, 0.75], gap="large")
 
 with left:
     st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("Quick start (recommended)")
+    st.subheader("Quick start")
     st.write(
         "Use this if you want a simple, predictable tutoring flow:\n\n"
         "1) Open **Policy Lab** and run one experiment (baseline + one shock).\n"
@@ -199,7 +197,7 @@ with left:
     )
     st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 
-    st.markdown("### Choose a topic (optional)")
+    st.markdown("### Choose a topic")
     topic = st.selectbox(
         "Topic focus",
         [
