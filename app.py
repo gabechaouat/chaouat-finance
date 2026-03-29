@@ -1,12 +1,14 @@
 import streamlit as st
+import os
+import glob
 from datetime import datetime
 
 # =========================
-# EDIT THESE PAGE PATHS ONLY
+# PAGE PATHS
 # =========================
 PAGES = {
-    "Policy Lab": "pages/Policy_Lab.py",
-    "Teaching Material": "pages/Teaching_Material.py",
+    "Policy Lab":       "pages/Policy_Lab.py",
+    "Teaching Material":"pages/Teaching_Material.py",
 }
 
 st.set_page_config(page_title="Chaouat Economics Lab", page_icon="📘", layout="wide")
@@ -14,296 +16,229 @@ st.set_page_config(page_title="Chaouat Economics Lab", page_icon="📘", layout=
 if "home_recent" not in st.session_state:
     st.session_state.home_recent = []
 
-def _switch_to(page_path: str, label_for_recent: str, page_name: str):
-    st.session_state.home_recent.insert(
-        0,
-        {"label": label_for_recent, "page": page_name, "ts": datetime.now().strftime("%Y-%m-%d %H:%M")},
-    )
+def _switch_to(page_path, label, page_name):
+    st.session_state.home_recent.insert(0, {
+        "label": label, "page": page_name,
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M"),
+    })
     st.session_state.home_recent = st.session_state.home_recent[:8]
     try:
         st.switch_page(page_path)
     except Exception:
-        st.error("Navigation failed. Verify that the PAGES paths match your /pages filenames.")
+        st.error("Navigation failed — check PAGES paths.")
 
+# =====================================================================
+# STYLE  (same earth palette as Policy Lab)
+# =====================================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
 
 :root {
-  --ink: #1a1814;
-  --ink-muted: #6b6760;
-  --ink-faint: #b0ada8;
-  --cream: #faf8f4;
-  --warm: #f2ede4;
-  --rule: #e0dbd2;
-  --accent: #c9622a;
-  --accent-light: #f7ece3;
-  --teal: #2a7a6f;
-  --teal-light: #e3f2ef;
-  --gold: #b08735;
-  --gold-light: #f5edda;
+  --ink:         #1a1814;
+  --ink-muted:   #6b6760;
+  --ink-faint:   #b0ada8;
+  --cream:       #faf8f4;
+  --warm:        #f2ede4;
+  --rule:        #e0dbd2;
+  --terra:       #c9622a;
+  --terra-light: #f7ece3;
+  --terra-mid:   #a84e20;
+  --sienna:      #8b3a1a;
+  --sand:        #c4a882;
+  --sand-dark:   #9e8060;
+  --stone:       #7a6f62;
+  --stone-light: #ece8e2;
 }
 
 html, body, * { font-family: 'DM Sans', sans-serif !important; }
+.block-container { padding-top: 0 !important; padding-bottom: 3rem; max-width: 1200px; }
 
-.block-container { padding-top: 0 !important; padding-bottom: 3rem; max-width: 1180px; }
-
-/* ---- masthead ---- */
+/* ── Masthead ── */
 .masthead {
   border-bottom: 3px double var(--rule);
-  padding: 28px 0 18px 0;
-  margin-bottom: 0;
+  padding: 30px 0 20px 0;
   text-align: center;
+  margin-bottom: 0;
 }
 .masthead-eyebrow {
-  font-size: 11px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  margin-bottom: 10px;
+  font-size: 10px; letter-spacing: 3.5px; text-transform: uppercase;
+  color: var(--ink-muted); margin-bottom: 10px;
 }
 .masthead-title {
   font-family: 'DM Serif Display', serif !important;
-  font-size: 56px;
-  line-height: 1.0;
-  color: var(--ink);
-  margin: 0 0 10px 0;
-  letter-spacing: -0.5px;
+  font-size: 58px; line-height: 1.0; color: var(--ink);
+  margin: 0 0 10px 0; letter-spacing: -0.5px;
 }
 .masthead-sub {
-  font-size: 15px;
-  color: var(--ink-muted);
-  font-weight: 300;
-  letter-spacing: 0.3px;
-  margin-bottom: 14px;
+  font-size: 15px; color: var(--ink-muted); font-weight: 300;
+  letter-spacing: 0.2px; margin-bottom: 16px;
 }
 .masthead-rule {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 14px;
+  display: flex; align-items: center; gap: 12px;
+  justify-content: center; margin-top: 16px;
 }
-.masthead-rule-line { flex: 1; max-width: 120px; height: 1px; background: var(--rule); }
-.masthead-rule-diamond { width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); flex-shrink: 0; }
+.masthead-rule-line { flex:1; max-width:110px; height:1px; background:var(--rule); }
+.masthead-rule-diamond {
+  width:7px; height:7px; background:var(--terra);
+  transform:rotate(45deg); flex-shrink:0;
+}
 
-/* ---- section rule ---- */
+/* ── Section labels ── */
 .section-label {
-  font-size: 10px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  border-top: 1px solid var(--rule);
-  padding-top: 10px;
-  margin: 32px 0 18px 0;
+  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--ink-muted); border-top: 1px solid var(--rule);
+  padding-top: 10px; margin: 30px 0 16px 0;
 }
 
-/* ---- lede / mission block ---- */
-.lede {
-  font-family: 'DM Serif Display', serif !important;
-  font-size: 26px;
-  line-height: 1.45;
-  color: var(--ink);
-  border-left: 3px solid var(--accent);
-  padding-left: 22px;
-  margin: 0 0 24px 0;
-}
-.body-text {
-  font-size: 15.5px;
-  line-height: 1.75;
-  color: var(--ink);
-  font-weight: 300;
-  margin: 0 0 14px 0;
-}
-
-/* ---- nav cards ---- */
+/* ── Nav cards ── */
 .nav-card {
-  background: var(--ink);
-  color: #fff;
-  border-radius: 4px;
-  padding: 22px 22px 18px 22px;
-  position: relative;
-  overflow: hidden;
+  border-radius: 4px; padding: 22px 20px 18px 20px;
+  color: #fff; position: relative; overflow: hidden;
 }
-.nav-card-accent { background: var(--accent); }
-.nav-card-teal { background: var(--teal); }
+.nc-terra  { background: var(--terra); }
+.nc-sienna { background: var(--sienna); }
+.nc-stone  { background: var(--stone); }
+.nc-ink    { background: var(--ink); }
 .nav-card-tag {
-  font-size: 10px;
-  letter-spacing: 2.5px;
-  text-transform: uppercase;
-  opacity: 0.6;
-  margin-bottom: 8px;
+  font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase;
+  opacity: 0.65; margin-bottom: 8px;
 }
 .nav-card-title {
   font-family: 'DM Serif Display', serif !important;
-  font-size: 22px;
-  margin: 0 0 6px 0;
-  color: #fff;
+  font-size: 22px; margin: 0 0 6px 0; color: #fff;
 }
-.nav-card-desc {
-  font-size: 13px;
-  opacity: 0.75;
-  line-height: 1.5;
-  margin: 0;
+.nav-card-desc { font-size: 13px; opacity: 0.75; line-height: 1.5; margin: 0; }
+
+/* ── Story section ── */
+.lede {
+  font-family: 'DM Serif Display', serif !important;
+  font-size: 25px; line-height: 1.45; color: var(--ink);
+  border-left: 3px solid var(--terra); padding-left: 20px;
+  margin: 0 0 22px 0;
+}
+.body-text {
+  font-size: 15px; line-height: 1.78; color: var(--ink);
+  font-weight: 300; margin: 0 0 13px 0;
+}
+.pull-quote {
+  font-family: 'DM Serif Display', serif !important;
+  font-style: italic; font-size: 19px; line-height: 1.5;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  padding: 16px 0; margin: 24px 0;
 }
 
-/* ---- partner cards ---- */
+/* ── Partner cards ── */
 .partner-card {
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 20px;
-  background: var(--cream);
-  height: 100%;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 20px; background: var(--cream); height: 100%;
 }
 .partner-tag {
-  font-size: 10px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  margin-bottom: 8px;
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--ink-muted); margin-bottom: 7px;
 }
 .partner-name {
   font-family: 'DM Serif Display', serif !important;
-  font-size: 20px;
-  color: var(--ink);
-  margin: 0 0 8px 0;
+  font-size: 19px; color: var(--ink); margin: 0 0 8px 0;
 }
 .partner-desc {
-  font-size: 13.5px;
-  color: var(--ink-muted);
-  line-height: 1.6;
-  margin: 0 0 14px 0;
+  font-size: 13.5px; color: var(--ink-muted);
+  line-height: 1.6; margin: 0 0 14px 0;
 }
 
-/* ---- stat row ---- */
-.stat-block {
-  border-top: 1px solid var(--rule);
-  padding-top: 14px;
-  text-align: center;
+/* ── Link buttons ── */
+.link-btn {
+  display: inline-block; border-radius: 3px;
+  padding: 8px 16px; font-size: 11px; letter-spacing: 1.5px;
+  text-transform: uppercase; font-weight: 500; text-decoration: none;
+  border: 1px solid var(--rule); color: var(--ink);
+  transition: border-color 120ms, color 120ms;
 }
-.stat-number {
-  font-family: 'DM Serif Display', serif !important;
-  font-size: 36px;
-  color: var(--accent);
-  line-height: 1;
-  margin: 0;
+.link-btn:hover { border-color: var(--terra); color: var(--terra); text-decoration: none; }
+.lb-terra { border-color: var(--terra); color: var(--terra); background: var(--terra-light); }
+.lb-terra:hover { background: #f0ddd1; }
+.lb-stone { border-color: var(--stone); color: var(--stone); background: var(--stone-light); }
+.lb-stone:hover { background: #ddd9d4; }
+
+/* ── Quick start ── */
+.qs-step {
+  border-left: 2px solid var(--terra); padding-left: 14px;
+  margin-bottom: 14px;
 }
-.stat-label {
-  font-size: 12px;
-  color: var(--ink-muted);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-top: 4px;
+.qs-step-title { font-weight: 500; font-size: 13.5px; color: var(--ink); margin: 0 0 3px 0; }
+.qs-step-desc  { font-size: 13px; color: var(--ink-muted); line-height: 1.55; margin: 0; }
+.qs-meta-box {
+  background: var(--warm); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 20px;
+}
+.qs-meta-label {
+  font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--ink-muted); margin-bottom: 10px;
+}
+.qs-meta-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 7px 0; border-bottom: 1px solid var(--rule); font-size: 13.5px;
+}
+.qs-meta-row:last-child { border-bottom: none; }
+.qs-meta-key   { color: var(--ink-muted); }
+.qs-meta-value { font-weight: 500; color: var(--ink); }
+.qs-tip {
+  border-left: 3px solid var(--sand-dark);
+  background: #f5eedd; padding: 12px 16px;
+  border-radius: 0 4px 4px 0; margin-top: 14px;
+  font-size: 13px; color: var(--ink-muted); line-height: 1.6;
 }
 
-/* ---- photo strip ---- */
-.photo-strip-label {
-  font-size: 11px;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-  margin-bottom: 10px;
+/* ── Photo ── */
+.photo-label {
+  font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase;
+  color: var(--ink-muted); margin-bottom: 10px;
 }
 .photo-placeholder {
-  background: var(--warm);
-  border: 1px dashed var(--rule);
-  border-radius: 4px;
-  padding: 48px 16px;
-  text-align: center;
-  color: var(--ink-faint);
-  font-size: 12px;
-  line-height: 1.6;
+  background: var(--warm); border: 1px dashed var(--rule);
+  border-radius: 4px; padding: 44px 16px;
+  text-align: center; color: var(--ink-faint);
+  font-size: 12px; line-height: 1.6;
 }
 
-/* ---- blockquote ---- */
-.pull-quote {
-  font-family: 'DM Serif Display', serif !important;
-  font-style: italic;
-  font-size: 21px;
-  line-height: 1.5;
-  color: var(--ink-muted);
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-  padding: 18px 0;
-  margin: 28px 0;
-}
-
-/* ---- buttons ---- */
-div.stButton > button {
-  background: var(--ink) !important;
-  color: #fff !important;
-  border: none !important;
-  border-radius: 3px !important;
-  font-size: 12px !important;
-  letter-spacing: 1.5px !important;
-  text-transform: uppercase !important;
-  font-weight: 500 !important;
-  padding: 10px 18px !important;
-  width: 100%;
-}
-div.stButton > button:hover {
-  background: var(--accent) !important;
-  transition: background 150ms ease;
-}
-
-/* ---- link button ---- */
-.link-btn {
-  display: inline-block;
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  padding: 8px 16px;
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--ink);
-  text-decoration: none;
-  font-weight: 500;
-  transition: border-color 150ms, color 150ms;
-}
-.link-btn:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-.link-btn-accent {
-  background: var(--accent-light);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.link-btn-teal {
-  background: var(--teal-light);
-  border-color: var(--teal);
-  color: var(--teal);
-}
-
-/* ---- footer ---- */
-.site-footer {
-  border-top: 3px double var(--rule);
-  padding-top: 16px;
-  margin-top: 40px;
-  font-size: 12px;
-  color: var(--ink-muted);
-  text-align: center;
-  letter-spacing: 0.3px;
-}
-
-/* ---- recent item ---- */
+/* ── Recent ── */
 .recent-item {
-  border-bottom: 1px solid var(--rule);
-  padding: 10px 0;
-  font-size: 13px;
-  color: var(--ink);
+  border-bottom: 1px solid var(--rule); padding: 9px 0;
+  font-size: 13px; color: var(--ink);
 }
 .recent-ts { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+
+/* ── Buttons ── */
+div.stButton > button {
+  background: var(--ink) !important; color: #fff !important;
+  border: none !important; border-radius: 3px !important;
+  font-size: 11px !important; letter-spacing: 1.5px !important;
+  text-transform: uppercase !important; font-weight: 500 !important;
+  padding: 10px 16px !important; width: 100%;
+}
+div.stButton > button:hover { background: var(--terra) !important; }
+
+/* ── Selectbox / slider labels ── */
+[data-testid="stSelectbox"] label,
+[data-testid="stSlider"] label { font-size: 12px !important; color: var(--ink-muted) !important; }
+
+/* ── Footer ── */
+.site-footer {
+  border-top: 3px double var(--rule); padding-top: 16px; margin-top: 40px;
+  font-size: 12px; color: var(--ink-muted); text-align: center; letter-spacing: 0.2px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-
-# =====================
+# =====================================================================
 # MASTHEAD
-# =====================
+# =====================================================================
 st.markdown("""
 <div class="masthead">
-  <div class="masthead-eyebrow">An open educational platform</div>
+  <div class="masthead-eyebrow">Open educational platform · Economics &amp; Policy</div>
   <div class="masthead-title">Chaouat Economics Lab</div>
-  <div class="masthead-sub">Lessons, simulations, and visual tools — built with educators, for educators.</div>
+  <div class="masthead-sub">Simulations, visual tools, and classroom-ready teaching materials — free for every educator.</div>
   <div class="masthead-rule">
     <div class="masthead-rule-line"></div>
     <div class="masthead-rule-diamond"></div>
@@ -312,41 +247,40 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
-# =====================
+# =====================================================================
 # NAVIGATION CARDS
-# =====================
+# =====================================================================
 st.markdown('<div class="section-label">Explore the platform</div>', unsafe_allow_html=True)
 
-col_pol, col_teach, col_fin = st.columns([1, 1, 1], gap="medium")
+nav1, nav2, nav3 = st.columns(3, gap="medium")
 
-with col_pol:
+with nav1:
     st.markdown("""
-    <div class="nav-card nav-card-accent">
+    <div class="nav-card nc-terra">
       <div class="nav-card-tag">Module 01</div>
       <div class="nav-card-title">Policy Lab</div>
-      <div class="nav-card-desc">Run interactive monetary & fiscal experiments. Export charts and CSV scenarios for classroom use.</div>
+      <div class="nav-card-desc">Interactive monetary &amp; fiscal experiments. Adjust parameters, observe mechanisms, export charts and CSV scenarios.</div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     if st.button("Open Policy Lab", key="open_policy"):
         _switch_to(PAGES["Policy Lab"], "Opened Policy Lab", "Policy Lab")
 
-with col_teach:
+with nav2:
     st.markdown("""
-    <div class="nav-card nav-card-teal">
+    <div class="nav-card nc-sienna">
       <div class="nav-card-tag">Module 02</div>
       <div class="nav-card-title">Teaching Material</div>
-      <div class="nav-card-desc">Slide decks, worksheets, and tutor-ready session structures adapted for low-resource settings.</div>
+      <div class="nav-card-desc">Slide decks, worksheets, and structured session guides — adapted for low-resource and low-bandwidth settings.</div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    if st.button("Open Teaching Material", key="open_teaching"):
+    if st.button("Open Teaching Material", key="open_teach"):
         _switch_to(PAGES["Teaching Material"], "Opened Teaching Material", "Teaching Material")
 
-with col_fin:
+with nav3:
     st.markdown("""
-    <div class="nav-card" style="background:#2c2c2a;">
+    <div class="nav-card nc-stone">
       <div class="nav-card-tag">Module 03</div>
       <div class="nav-card-title">Finance Tools</div>
       <div class="nav-card-desc">Live market data, investment simulator, financial news, and stock analysis dashboard.</div>
@@ -356,58 +290,48 @@ with col_fin:
     if st.button("Open Finance Tools", key="open_finance"):
         st.info("Navigate to Finance Tools from the sidebar.")
 
+# =====================================================================
+# STORY  +  PHOTOS / RECENT
+# =====================================================================
+st.markdown('<div class="section-label">About the lab</div>', unsafe_allow_html=True)
 
-# =====================
-# IMPACT STATS
-# =====================
-st.markdown('<div class="section-label">Our reach</div>', unsafe_allow_html=True)
+left_col, right_col = st.columns([1.55, 1], gap="large")
 
-s1, s2, s3, s4 = st.columns(4, gap="medium")
-for col, number, label in [
-    (s1, "2+", "years building"),
-    (s2, "Dozens", "educators using the platform"),
-    (s3, "$1000s", "raised for education"),
-    (s4, "3", "countries reached"),
-]:
-    with col:
-        st.markdown(f"""
-        <div class="stat-block">
-          <div class="stat-number">{number}</div>
-          <div class="stat-label">{label}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-
-# =====================
-# ORIGIN STORY
-# =====================
-st.markdown('<div class="section-label">Our story</div>', unsafe_allow_html=True)
-
-left_story, right_sidebar = st.columns([1.5, 1], gap="large")
-
-with left_story:
+with left_col:
     st.markdown("""
-    <p class="lede">A coding project that became a shared teaching resource — built through collaboration across three continents.</p>
+    <p class="lede">Built by educators, tested in classrooms, and shaped by feedback across three continents.</p>
 
-    <p class="body-text">In October 2025, the Chaouat Economics Lab began as a platform of lessons, simulations, and visual tools in economics — designed while volunteering with tutors at <strong>Koh-Ed</strong>. The goal was simple: make those resources accessible beyond one organization.</p>
+    <p class="body-text">
+      The Chaouat Economics Lab started in 2025 as a set of economics simulations and teaching tools —
+      originally built while volunteering with tutors at
+      <a href="https://bloglebilingue.wordpress.com/2020/04/28/koh-ed-a-detailed-view-of-the-organization/" target="_blank" style="color:#c9622a; text-decoration:none; font-weight:500;">Koh-Ed</a>.
+      The goal was to make interactive economics education available beyond a single organization.
+    </p>
 
-    <p class="body-text">The project quickly became collaborative. Koh-Ed tutors tested modules, gave feedback, and once the issues were fixed, dozens used the platform in their lessons. To reach classrooms where economics is not usually taught, we then contacted teachers in South Asia, who helped us adapt the platform for <strong>low-resource settings</strong> — mainly activities that work with limited internet access.</p>
+    <p class="body-text">
+      What started as a solo coding project became genuinely collaborative. Koh-Ed tutors tested every module,
+      flagged what didn't work, and helped shape the platform into something actually usable in a lesson.
+      When we reached out to teachers in South Asia, they pushed us to rethink what "accessible" really means —
+      the result was a set of activities that work with little or no internet access.
+    </p>
 
-    <div class="pull-quote">"Without these educators, the platform would have remained a coding project, rather than a shared teaching resource."</div>
+    <div class="pull-quote">The platform only became useful when it stopped being mine alone.</div>
 
-    <p class="body-text">As the platform grew, we sought to fundraise for educational projects by advertising them directly on the platform. We worked with <strong>Kyra Ezikeuzor</strong> through the Omelora Project to raise funds for books, blankets, and supplies for an orphanage in Nigeria to help launch a library. We are currently fundraising for school resources for a <strong>270-child orphanage in Uganda</strong>.</p>
-
-    <p class="body-text">Alongside <strong>Rabira Dosho</strong>, who leads the platform's outreach, we have raised thousands of dollars toward this effort. The Chaouat Economics Lab couldn't have had a meaningful impact without the help of these wonderful people.</p>
+    <p class="body-text">
+      Alongside the teaching side, the lab has become a space to raise awareness for educational projects we believe in.
+      In partnership with
+      <a href="https://www.idealist.org/en/nonprofit/30eaaf27a8564a40a71faa66b6a8c02c-omelora-missouri-city" target="_blank" style="color:#c9622a; text-decoration:none; font-weight:500;">The Omelora Project</a>
+      and Kyra Ezikeuzor, we helped fund books, blankets, and supplies for a Nigerian orphanage library.
+      We are now fundraising for school resources for a 270-child orphanage in Uganda —
+      led by Rabira Dosho, who heads our outreach.
+    </p>
     """, unsafe_allow_html=True)
 
-with right_sidebar:
-
-    # ---- Pakistan impact photos ----
-    st.markdown('<div class="photo-strip-label">📍 Impact in Pakistan</div>', unsafe_allow_html=True)
+with right_col:
+    # ── Pakistan photos ──
+    st.markdown('<div class="photo-label">Impact in Pakistan</div>', unsafe_allow_html=True)
 
     PAKISTAN_PHOTOS = "images/pakistan"
-    import os, glob
-
     found = []
     for ext in ("jpg", "jpeg", "png", "webp"):
         found += glob.glob(f"{PAKISTAN_PHOTOS}/*.{ext}")
@@ -416,30 +340,20 @@ with right_sidebar:
     if found:
         for p in found[:4]:
             st.image(p, use_container_width=True)
+            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
     else:
-        st.markdown("""
-        <div class="photo-placeholder">
-          Add images to <code>images/pakistan/</code><br/>to display impact photos here.<br/><br/>
-          Supported: jpg, jpeg, png, webp
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class="photo-placeholder">
-          Photo 2
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class="photo-placeholder">
-          Photo 3
-        </div>
-        """, unsafe_allow_html=True)
+        for label in ["Photo 1", "Photo 2", "Photo 3"]:
+            st.markdown(f"""
+            <div class="photo-placeholder">
+              {label}<br/><span style="font-size:11px;">Add images to <code>images/pakistan/</code></span>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-    # ---- Recent activity ----
-    st.markdown('<div class="section-label" style="margin-top:28px;">Recent activity</div>', unsafe_allow_html=True)
+    # ── Recent activity ──
+    st.markdown('<div class="section-label" style="margin-top:20px;">Recent activity</div>', unsafe_allow_html=True)
     if not st.session_state.home_recent:
-        st.markdown('<p style="font-size:13px;color:#b0ada8;">Nothing yet — use the buttons above to navigate.</p>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:13px; color:#b0ada8;">Nothing yet — use the buttons above.</p>', unsafe_allow_html=True)
     else:
         for r in st.session_state.home_recent:
             st.markdown(f"""
@@ -452,11 +366,10 @@ with right_sidebar:
             st.session_state.home_recent = []
             st.rerun()
 
-
-# =====================
-# PARTNER ORGANISATIONS
-# =====================
-st.markdown('<div class="section-label">Partners & collaborators</div>', unsafe_allow_html=True)
+# =====================================================================
+# PARTNERS
+# =====================================================================
+st.markdown('<div class="section-label">Partners &amp; collaborators</div>', unsafe_allow_html=True)
 
 p1, p2, p3 = st.columns(3, gap="medium")
 
@@ -465,108 +378,223 @@ with p1:
     <div class="partner-card">
       <div class="partner-tag">Education partner</div>
       <div class="partner-name">Koh-Ed</div>
-      <div class="partner-desc">The tutoring organization where the platform was first built and tested. Koh-Ed tutors shaped every iteration of the teaching modules through direct classroom feedback.</div>
+      <div class="partner-desc">
+        The tutoring organization where every module was first tested. Koh-Ed tutors gave the feedback
+        that turned a prototype into a real teaching tool.
+      </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    st.markdown('<a class="link-btn link-btn-teal" href="https://www.koh-ed.org" target="_blank">Visit Koh-Ed →</a>', unsafe_allow_html=True)
+    st.markdown("""
+    <a class="link-btn lb-stone"
+       href="https://bloglebilingue.wordpress.com/2020/04/28/koh-ed-a-detailed-view-of-the-organization/"
+       target="_blank">Learn about Koh-Ed →</a>
+    """, unsafe_allow_html=True)
 
 with p2:
     st.markdown("""
     <div class="partner-card">
       <div class="partner-tag">Fundraising partner</div>
       <div class="partner-name">The Omelora Project</div>
-      <div class="partner-desc">Working with Kyra Ezikeuzor and the Omelora Project, we've raised funds for orphanages in Nigeria and Uganda — books, blankets, and school supplies for hundreds of children.</div>
+      <div class="partner-desc">
+        With Kyra Ezikeuzor and the Omelora Project, we've raised funds for orphanages in Nigeria and Uganda —
+        books, blankets, and school supplies for hundreds of children.
+      </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    st.markdown('<a class="link-btn link-btn-accent" href="https://www.omelora.org" target="_blank">Visit Omelora →</a>', unsafe_allow_html=True)
+    st.markdown("""
+    <a class="link-btn lb-terra"
+       href="https://www.idealist.org/en/nonprofit/30eaaf27a8564a40a71faa66b6a8c02c-omelora-missouri-city"
+       target="_blank">Visit Omelora →</a>
+    """, unsafe_allow_html=True)
 
 with p3:
     st.markdown("""
     <div class="partner-card">
-      <div class="partner-tag">Current campaign</div>
-      <div class="partner-name">Uganda Orphanage</div>
-      <div class="partner-desc">We are currently fundraising for school resources for a 270-child orphanage in Uganda. Led by Rabira Dosho, who heads the platform's outreach efforts.</div>
+      <div class="partner-tag">Active campaign</div>
+      <div class="partner-name">Uganda — 270 children</div>
+      <div class="partner-desc">
+        We are currently fundraising for school resources for a 270-child orphanage in Uganda,
+        led by Rabira Dosho, who heads the platform's outreach.
+      </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    st.markdown('<a class="link-btn link-btn-accent" href="https://www.omelora.org" target="_blank">Support the campaign →</a>', unsafe_allow_html=True)
+    st.markdown("""
+    <a class="link-btn lb-terra"
+       href="https://www.idealist.org/en/nonprofit/30eaaf27a8564a40a71faa66b6a8c02c-omelora-missouri-city"
+       target="_blank">Support the campaign →</a>
+    """, unsafe_allow_html=True)
 
-
-# =====================
-# QUICK START
-# =====================
+# =====================================================================
+# QUICK START FOR TUTORS  (redesigned)
+# =====================================================================
 st.markdown('<div class="section-label">Quick start for tutors</div>', unsafe_allow_html=True)
 
 qs_left, qs_right = st.columns([1.5, 1], gap="large")
 
+# ── Data ──
+FLOWS = {
+    "Monetary policy (Taylor rule)": {
+        "module": "Policy Lab → Module 01",
+        "prereqs": "Inflation, interest rates, output gap",
+        "steps": [
+            ("Concept check",  "Ask students: what should a central bank do when inflation is above target? Establish intuition before opening the model."),
+            ("Baseline run",   "Set parameters to the current macro environment. Read off the implied rate. Ask: does this match what the real central bank is doing?"),
+            ("Shock scenario", "Apply a supply shock. Watch how the policy path changes. Compare φπ = 1.5 vs φπ = 0.5 — which central bank reacts more aggressively?"),
+            ("Rate smoothing", "Toggle smoothing between 0 and 0.8. Discuss why central banks prefer gradual adjustment over jumping to the implied rate."),
+            ("Wrap-up",        "Use the decomposition chart: break the rate into base + inflation gap + output gap. Each component maps to a lecture concept."),
+        ],
+        "tip": "Export the CSV and ask students to replicate the chart in a spreadsheet — good for reinforcing the formula.",
+    },
+    "Fiscal policy (multipliers)": {
+        "module": "Policy Lab → Module 02",
+        "prereqs": "MPC, aggregate demand, Keynesian cross",
+        "steps": [
+            ("Concept check",  "What happens to GDP when the government spends €1 more? Collect answers before touching the model."),
+            ("Base multiplier","Set MPC = 0.8, no openness, no crowding. Compute the multiplier mentally first, then verify with the model."),
+            ("Add leakages",   "Increase import propensity from 0 to 0.3. Watch the multiplier surface shift. Which leakage matters most?"),
+            ("State dependence","Switch between 'below potential' and 'above potential'. Discuss why the same spending has very different effects."),
+            ("Wrap-up",        "The leakage waterfall chart is ideal for showing where each pound of stimulus goes. Walk through it step by step."),
+        ],
+        "tip": "The 3D surface is best used after students understand the basic formula — it shows all parameter combinations at once.",
+    },
+    "Debt dynamics (r − g)": {
+        "module": "Policy Lab → Module 03",
+        "prereqs": "Government budget identity, compound growth",
+        "steps": [
+            ("Concept check",  "When does government debt spiral? Ask students to guess before running any numbers."),
+            ("r vs g",         "Set r = 4%, g = 3%. Observe baseline trajectory. Then flip to r = 2%, g = 4%. The debt path looks very different."),
+            ("Fiscal shock",   "Add a primary balance deterioration in year 3. How many years until debt stabilises again?"),
+            ("Sustainability", "Use the contour map to find the primary balance that keeps debt flat. Compare to current real-world figures."),
+            ("Wrap-up",        "The fan chart around the baseline is a natural way to introduce uncertainty — small changes in g compound over 15 years."),
+        ],
+        "tip": "Ask students to find the 'point of no return' on the sustainability map — the combination where debt explodes regardless of adjustment.",
+    },
+    "Trade (tariffs & incidence)": {
+        "module": "Policy Lab → Module 04",
+        "prereqs": "Consumer/producer surplus, elasticity",
+        "steps": [
+            ("Concept check",  "Who really pays a tariff — the importer or the consumer? Take a poll first."),
+            ("Small country",  "Set foreign elasticity high. Show that domestic consumers bear nearly all the cost. Walk through the welfare rectangles."),
+            ("Large country",  "Reduce foreign elasticity. Watch the exporter burden grow. Introduce the optimal tariff argument."),
+            ("Welfare map",    "Explore the contour map. Under what conditions is a tariff welfare-positive? When is it always negative?"),
+            ("Wrap-up",        "The incidence bar chart directly answers the opening poll. Useful for making the maths concrete."),
+        ],
+        "tip": "Pair this with a real example — US steel tariffs 2018 or EU carbon border adjustments — and ask students to estimate elasticities.",
+    },
+}
+
+level_notes = {
+    "High school":    "Keep the scenario simple. Skip the 3D surface. Focus on the main chart and the result cards.",
+    "Undergraduate":  "All charts are appropriate. Use the decomposition and sensitivity maps for discussion.",
+    "Advanced":       "Push on the model's assumptions. What is missing? Where would a real model diverge?",
+}
+
+time_notes = {
+    30: "Run one scenario only. Concept check + one experiment + result cards.",
+    45: "Concept check + two scenarios + one sensitivity chart.",
+    60: "Full flow: all five steps. Leave 10 minutes for the wrap-up discussion.",
+    75: "Full flow + export CSV + one extension question.",
+    90: "Full flow + independent exploration + short written response.",
+}
+
 with qs_left:
-    st.markdown("""
-    <p class="body-text">Use this flow for a consistent tutoring session:</p>
-    """, unsafe_allow_html=True)
+    st.markdown('<p style="font-size:14px; color:#6b6760; margin-bottom:18px;">Select a topic and session parameters to get a step-by-step teaching plan.</p>', unsafe_allow_html=True)
 
-    flows = {
-        "Monetary policy (Taylor rule)": [
-            ("Warm-up", "Define inflation vs target; interpret output gap; why a rule exists."),
-            ("Experiment", "Run baseline, then supply vs demand shock; compare φπ and smoothing."),
-            ("Wrap", "Explain decomposition: base + inflation gap response + output gap response."),
-        ],
-        "Fiscal policy (multipliers)": [
-            ("Warm-up", "Multiplier intuition: MPC, leakages, slack vs capacity."),
-            ("Experiment", "Temporary spending shock under different MPC / openness assumptions."),
-            ("Wrap", "State dependence: why multipliers differ across cycles."),
-        ],
-        "Debt dynamics (sustainability)": [
-            ("Warm-up", "Debt identity; r−g; primary balance."),
-            ("Experiment", "Simulate r>g vs r<g; add a growth shock; interpret path."),
-            ("Wrap", "Sustainability vs liquidity; what levers matter."),
-        ],
-        "Growth & development (institutions)": [
-            ("Warm-up", "Development beyond GDP; institutions; state capacity."),
-            ("Experiment", "Mechanism walkthrough: poverty trap + measurement pitfalls."),
-            ("Wrap", "Evidence discipline: identification + external validity."),
-        ],
-        "Trade (tariffs & incidence)": [
-            ("Warm-up", "Surplus, incidence, deadweight loss."),
-            ("Experiment", "Tariff incidence with elasticities; small vs large country."),
-            ("Wrap", "Distributional effects and second-round impacts."),
-        ],
-    }
+    topic   = st.selectbox("Topic", list(FLOWS.keys()), label_visibility="collapsed", key="qs_topic")
+    col_lv, col_tm = st.columns(2, gap="medium")
+    with col_lv:
+        level   = st.selectbox("Audience level", ["High school", "Undergraduate", "Advanced"], index=1, key="qs_level")
+    with col_tm:
+        minutes = st.select_slider("Session length", options=[30, 45, 60, 75, 90], value=60, key="qs_mins")
 
-    topic = st.selectbox("Topic", list(flows.keys()), label_visibility="collapsed")
-    level = st.selectbox("Level", ["High school", "Undergraduate", "Advanced"], index=1)
-    minutes = st.select_slider("Time", options=[30, 45, 60, 75, 90], value=60)
+    flow = FLOWS[topic]
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
-    plan = flows[topic]
-    for i, (t, desc) in enumerate(plan, start=1):
+    for i, (title, desc) in enumerate(flow["steps"], start=1):
         st.markdown(f"""
-        <div style="border-left:2px solid #c9622a; padding-left:14px; margin-bottom:12px;">
-          <div style="font-weight:500; font-size:14px; color:#1a1814;">{i}. {t}</div>
-          <div style="font-size:13px; color:#6b6760; margin-top:3px;">{desc}</div>
+        <div class="qs-step">
+          <div class="qs-step-title">{i}. {title}</div>
+          <div class="qs-step-desc">{desc}</div>
         </div>
         """, unsafe_allow_html=True)
 
+    st.markdown(f"""
+    <div class="qs-tip">
+      <strong style="color:#9e8060;">Tutor tip —</strong> {flow['tip']}
+    </div>
+    """, unsafe_allow_html=True)
+
 with qs_right:
-    st.markdown("""
-    <div style="background:#f2ede4; border:1px solid #e0dbd2; border-radius:4px; padding:22px; margin-top:22px;">
-      <div style="font-size:10px; letter-spacing:2.5px; text-transform:uppercase; color:#6b6760; margin-bottom:12px;">Platform philosophy</div>
-      <p style="font-size:14px; line-height:1.7; color:#1a1814; margin:0 0 12px 0;">
-        Every module was tested by a real tutor before being made public. If something doesn't work in a classroom, it doesn't ship.
-      </p>
-      <p style="font-size:14px; line-height:1.7; color:#1a1814; margin:0;">
-        The platform is designed to work in low-bandwidth environments. Core teaching tools require no live internet connection.
+    st.markdown(f"""
+    <div class="qs-meta-box">
+      <div class="qs-meta-label">Session overview</div>
+      <div class="qs-meta-row">
+        <span class="qs-meta-key">Module</span>
+        <span class="qs-meta-value">{flow['module']}</span>
+      </div>
+      <div class="qs-meta-row">
+        <span class="qs-meta-key">Level</span>
+        <span class="qs-meta-value">{level}</span>
+      </div>
+      <div class="qs-meta-row">
+        <span class="qs-meta-key">Duration</span>
+        <span class="qs-meta-value">{minutes} min</span>
+      </div>
+      <div class="qs-meta-row">
+        <span class="qs-meta-key">Prerequisites</span>
+        <span class="qs-meta-value" style="text-align:right; max-width:60%;">{flow['prereqs']}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown(f"""
+    <div style="margin-top:14px; background:var(--warm); border:1px solid var(--rule);
+                border-radius:4px; padding:18px;">
+      <div class="qs-meta-label">For {level.lower()} students</div>
+      <p style="font-size:13.5px; color:#1a1814; line-height:1.65; margin:0;">
+        {level_notes[level]}
       </p>
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown(f"""
+    <div style="margin-top:14px; background:var(--terra-light); border-left:3px solid var(--terra);
+                border-radius:0 4px 4px 0; padding:14px 16px;">
+      <div class="qs-meta-label">In {minutes} minutes</div>
+      <p style="font-size:13.5px; color:#6b6760; line-height:1.65; margin:0;">
+        {time_notes[minutes]}
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# =====================
+    st.markdown("""
+    <div style="margin-top:14px; background:var(--stone-light); border:1px solid var(--rule);
+                border-radius:4px; padding:18px;">
+      <div class="qs-meta-label">Platform design principle</div>
+      <p style="font-size:13px; color:#6b6760; line-height:1.65; margin:0;">
+        Every module was tested by a real tutor before being made available.
+        If it didn't work in a classroom, it didn't ship.
+        Core activities function with limited internet access.
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# =====================================================================
 # FOOTER
-# =====================
+# =====================================================================
 st.markdown("""
 <div class="site-footer">
   © Chaouat Economics Lab · Built with Python / Streamlit · Educational use only<br/>
-  <span style="font-size:11px;">In partnership with Koh-Ed &amp; The Omelora Project</span>
+  <span style="font-size:11px;">
+    In partnership with
+    <a href="https://bloglebilingue.wordpress.com/2020/04/28/koh-ed-a-detailed-view-of-the-organization/"
+       target="_blank" style="color:#9e8060; text-decoration:none;">Koh-Ed</a>
+    &amp;
+    <a href="https://www.idealist.org/en/nonprofit/30eaaf27a8564a40a71faa66b6a8c02c-omelora-missouri-city"
+       target="_blank" style="color:#c9622a; text-decoration:none;">The Omelora Project</a>
+  </span>
 </div>
 """, unsafe_allow_html=True)
