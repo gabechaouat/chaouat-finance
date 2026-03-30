@@ -238,7 +238,7 @@ st.markdown("""
 <div class="masthead">
   <div class="masthead-eyebrow">Open educational platform · Economics &amp; Policy</div>
   <div class="masthead-title">Chaouat Economics Lab</div>
-  <div class="masthead-sub">Simulations, visual tools, and classroom-ready teaching materials — free for every educator.</div>
+  <div class="masthead-sub">Simulations, visual tools, and teaching materials made by educators, for educators.</div>
   <div class="masthead-rule">
     <div class="masthead-rule-line"></div>
     <div class="masthead-rule-diamond"></div>
@@ -302,20 +302,20 @@ with left_col:
     <p class="lede">Built by educators, tested in classrooms, and shaped by feedback across three continents.</p>
 
     <p class="body-text">
-      The Chaouat Economics Lab started in 2025 as a set of economics simulations and teaching tools —
+      The Chaouat Economics Lab started in 2025 as a set of economics simulations and teaching tools,
       originally built while volunteering with tutors at
       <a href="https://bloglebilingue.wordpress.com/2020/04/28/koh-ed-a-detailed-view-of-the-organization/" target="_blank" style="color:#c9622a; text-decoration:none; font-weight:500;">Koh-Ed</a>.
       The goal was to make interactive economics education available beyond a single organization.
     </p>
 
     <p class="body-text">
-      What started as a solo coding project became genuinely collaborative. Koh-Ed tutors tested every module,
-      flagged what didn't work, and helped shape the platform into something actually usable in a lesson.
-      When we reached out to teachers in South Asia, they pushed us to rethink what "accessible" really means —
-      the result was a set of activities that work with little or no internet access.
+      What started as a solo coding project expanded rather quickly. Koh-Ed tutors tested every module,
+      flagged what didn't work, and helped shape the platform into something actually useful in a lesson.
+      When we reached out to teachers in South Asia, they pushed us to rethink what "accessible" really means;
+      the result was a set of activities and presentations that work with little or no internet access.
     </p>
 
-    <div class="pull-quote">The platform only became useful when it stopped being mine alone.</div>
+    <div class="pull-quote">Collaboration is what made our work meaningful.</div>
 
     <p class="body-text">
       Alongside the teaching side, the lab has become a space to raise awareness for educational projects we believe in.
