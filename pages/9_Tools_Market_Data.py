@@ -1,4 +1,5 @@
 import datetime as dt
+import streamlit.components.v1 as components
 import math
 import numpy as np
 import pandas as pd
@@ -239,8 +240,15 @@ def get_ohlcv(sym: str, period: str = "1y", interval: str = "1d") -> pd.DataFram
     t = yf.Ticker(sym)
     df = t.history(period=period, interval=interval, auto_adjust=True)
     if df.empty: return df
-    df.index = pd.to_datetime(df.index).tz_localize(None)
-    return df[["Open","High","Low","Close","Volume"]].dropna()
+    # Strip timezone robustly — handle both tz-aware and tz-naive indexes
+    idx = df.index
+    if hasattr(idx, "tz") and idx.tz is not None:
+        idx = idx.tz_convert("UTC").tz_localize(None)
+    df.index = pd.to_datetime(idx)
+    df = df[["Open","High","Low","Close","Volume"]].dropna()
+    # Convert index to plain dates so Plotly Candlestick never sees tz info
+    df.index = df.index.normalize()
+    return df
 
 @st.cache_data(ttl=30*60, show_spinner=False)
 def get_multi_close(tickers: tuple, period: str = "1y") -> pd.DataFrame:
@@ -339,19 +347,40 @@ if tape:
     items_html = ""
     for item in tape * 2:   # duplicate for seamless loop
         chg_cls = "tape-chg-pos" if item["chg"] >= 0 else "tape-chg-neg"
-        sign    = "▲" if item["chg"] >= 0 else "▼"
-        items_html += f"""
-        <div class="tape-item">
-          <span class="tape-sym">{item['label']}</span>
-          <span class="tape-val">{item['price']:,.2f}</span>
-          <span class="{chg_cls}">{sign} {abs(item['chg']):.2f}%</span>
-        </div>
-        """
-    st.markdown(f"""
-    <div class="ticker-tape-wrap">
-      <div class="ticker-tape">{items_html}</div>
-    </div>
-    """, unsafe_allow_html=True)
+        chg_color = "#3a6b1a" if item["chg"] >= 0 else "#8b3a1a"
+        sign = "▲" if item["chg"] >= 0 else "▼"
+        price_str = f"{item['price']:,.2f}"
+        chg_str   = f"{sign} {abs(item['chg']):.2f}%"
+        items_html += f"""<div style="display:inline-flex;align-items:baseline;gap:8px;font-size:12px;margin-right:40px;">
+          <span style="font-family:'DM Mono',monospace;font-weight:500;color:#1a1814;letter-spacing:1px;">{item['label']}</span>
+          <span style="font-family:'DM Mono',monospace;color:#6b6760;">{price_str}</span>
+          <span style="font-family:'DM Mono',monospace;color:{chg_color};font-size:11px;">{chg_str}</span>
+        </div>"""
+
+    tape_html = f"""<!DOCTYPE html>
+<html><head>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body {{ margin:0; background:#f2ede4; overflow:hidden; }}
+  .tape-wrap {{
+    overflow:hidden; border-top:1px solid #e0dbd2; border-bottom:1px solid #e0dbd2;
+    background:#f2ede4; padding:7px 0; width:100%;
+  }}
+  .tape-inner {{
+    display:inline-flex; white-space:nowrap;
+    animation: scroll-tape 35s linear infinite;
+  }}
+  @keyframes scroll-tape {{
+    0%   {{ transform: translateX(0); }}
+    100% {{ transform: translateX(-50%); }}
+  }}
+</style>
+</head><body>
+<div class="tape-wrap">
+  <div class="tape-inner">{items_html}</div>
+</div>
+</body></html>"""
+    components.html(tape_html, height=38, scrolling=False)
 
 # ─────────────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -461,40 +490,44 @@ with t1:
                               vertical_spacing=0.02,
                               subplot_titles=["","MACD","RSI"])
 
-        # Candlestick
+        # Candlestick — use explicit list to guarantee no tz-aware objects reach Plotly
+        x_dates = ohlcv.index.strftime("%Y-%m-%d").tolist()
         fig_c.add_trace(go.Candlestick(
-            x=ohlcv.index, open=ohlcv["Open"], high=ohlcv["High"],
-            low=ohlcv["Low"],  close=ohlcv["Close"],
+            x=x_dates,
+            open=ohlcv["Open"].tolist(),
+            high=ohlcv["High"].tolist(),
+            low=ohlcv["Low"].tolist(),
+            close=ohlcv["Close"].tolist(),
             increasing=dict(line=dict(color=C["green"],width=1), fillcolor=C["green"]+"55"),
             decreasing=dict(line=dict(color=C["sienna"],width=1), fillcolor=C["sienna"]+"55"),
             name="OHLC", showlegend=False,
         ), row=1, col=1)
 
         # Bollinger bands
-        fig_c.add_trace(go.Scatter(x=ohlcv.index, y=ohlcv["BB_up"],
+        fig_c.add_trace(go.Scatter(x=x_dates, y=ohlcv["BB_up"].tolist(),
             name="BB upper", line=dict(color=C["sand"],width=1,dash="dot"), showlegend=True), row=1, col=1)
-        fig_c.add_trace(go.Scatter(x=ohlcv.index, y=ohlcv["BB_dn"],
+        fig_c.add_trace(go.Scatter(x=x_dates, y=ohlcv["BB_dn"].tolist(),
             name="BB lower", line=dict(color=C["sand"],width=1,dash="dot"),
             fill="tonexty", fillcolor="rgba(196,168,130,0.08)", showlegend=False), row=1, col=1)
-        fig_c.add_trace(go.Scatter(x=ohlcv.index, y=ohlcv["BB_mid"],
+        fig_c.add_trace(go.Scatter(x=x_dates, y=ohlcv["BB_mid"].tolist(),
             name="BB mid", line=dict(color=C["sand_dark"],width=1), showlegend=True), row=1, col=1)
 
         # SMAs
         for ma, color, w in [("SMA20",C["terra"],1.5),("SMA50",C["stone"],1.5),("SMA200",C["ink"],1.8)]:
-            fig_c.add_trace(go.Scatter(x=ohlcv.index, y=ohlcv[ma],
+            fig_c.add_trace(go.Scatter(x=x_dates, y=ohlcv[ma].tolist(),
                 name=ma, line=dict(color=color,width=w)), row=1, col=1)
 
-        # Volume bar (row 2 via MACD)
+        # MACD
         macd_colors = [C["green"] if v>=0 else C["sienna"] for v in ohlcv["Hist"]]
-        fig_c.add_trace(go.Bar(x=ohlcv.index, y=ohlcv["Hist"],
+        fig_c.add_trace(go.Bar(x=x_dates, y=ohlcv["Hist"].tolist(),
             name="MACD hist", marker_color=macd_colors, showlegend=False), row=2, col=1)
-        fig_c.add_trace(go.Scatter(x=ohlcv.index, y=ohlcv["MACD"],
+        fig_c.add_trace(go.Scatter(x=x_dates, y=ohlcv["MACD"].tolist(),
             name="MACD", line=dict(color=C["terra"],width=1.5)), row=2, col=1)
-        fig_c.add_trace(go.Scatter(x=ohlcv.index, y=ohlcv["Signal"],
+        fig_c.add_trace(go.Scatter(x=x_dates, y=ohlcv["Signal"].tolist(),
             name="Signal", line=dict(color=C["stone"],width=1.5,dash="dot")), row=2, col=1)
 
         # RSI
-        fig_c.add_trace(go.Scatter(x=ohlcv.index, y=ohlcv["RSI"],
+        fig_c.add_trace(go.Scatter(x=x_dates, y=ohlcv["RSI"].tolist(),
             name="RSI", line=dict(color=C["sienna"],width=2), showlegend=False), row=3, col=1)
         fig_c.add_hline(y=70, row=3, col=1, line_color=C["sienna"], line_width=1, line_dash="dot")
         fig_c.add_hline(y=30, row=3, col=1, line_color=C["green"],  line_width=1, line_dash="dot")
