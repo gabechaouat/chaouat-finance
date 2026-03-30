@@ -342,7 +342,7 @@ with right_col:
             st.image(p, use_container_width=True)
             st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
     else:
-        for label in ["Photo 1", "Photo 2", "Photo 3"]:
+        for label in ["Photo 1", "Photo 2"]:
             st.markdown(f"""
             <div class="photo-placeholder">
               {label}<br/><span style="font-size:11px;">Add images to <code>images/pakistan/</code></span>
