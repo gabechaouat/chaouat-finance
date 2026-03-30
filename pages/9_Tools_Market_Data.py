@@ -498,8 +498,8 @@ with t1:
             high=ohlcv["High"].tolist(),
             low=ohlcv["Low"].tolist(),
             close=ohlcv["Close"].tolist(),
-            increasing=dict(line=dict(color=C["green"],width=1), fillcolor=C["green"]+"55"),
-            decreasing=dict(line=dict(color=C["sienna"],width=1), fillcolor=C["sienna"]+"55"),
+            increasing=dict(line=dict(color=C["green"], width=1), fillcolor="rgba(58,107,26,0.33)"),
+            decreasing=dict(line=dict(color=C["sienna"], width=1), fillcolor="rgba(139,58,26,0.33)"),
             name="OHLC", showlegend=False,
         ), row=1, col=1)
 
@@ -531,8 +531,8 @@ with t1:
             name="RSI", line=dict(color=C["sienna"],width=2), showlegend=False), row=3, col=1)
         fig_c.add_hline(y=70, row=3, col=1, line_color=C["sienna"], line_width=1, line_dash="dot")
         fig_c.add_hline(y=30, row=3, col=1, line_color=C["green"],  line_width=1, line_dash="dot")
-        fig_c.add_hrect(y0=70,y1=100, row=3, col=1, fillcolor=C["sienna"]+"18", line_width=0)
-        fig_c.add_hrect(y0=0, y1=30,  row=3, col=1, fillcolor=C["green"]+"18",  line_width=0)
+        fig_c.add_hrect(y0=70, y1=100, row=3, col=1, fillcolor="rgba(139,58,26,0.09)", line_width=0)
+        fig_c.add_hrect(y0=0,  y1=30,  row=3, col=1, fillcolor="rgba(58,107,26,0.09)",  line_width=0)
 
         fig_c.update_layout(
             height=640, paper_bgcolor=C["cream"], plot_bgcolor=C["cream"],
@@ -1157,6 +1157,9 @@ with t6:
 
             for i, (sym, row) in enumerate(normed.iterrows()):
                 vals = row[radar_metrics].tolist() + [row[radar_metrics[0]]]
+                hex_c = PALETTE[i % len(PALETTE)].lstrip("#")
+                r_c, g_c, b_c = int(hex_c[0:2],16), int(hex_c[2:4],16), int(hex_c[4:6],16)
+                fill_rgba = f"rgba({r_c},{g_c},{b_c},0.16)"
                 fig_rad.add_trace(go.Scatterpolar(
                     r=vals, theta=categories,
                     name=sym, mode="lines+markers",
@@ -1164,7 +1167,7 @@ with t6:
                     marker=dict(size=6, color=PALETTE[i%len(PALETTE)],
                                 line=dict(color=C["cream"],width=1.5)),
                     fill="toself",
-                    fillcolor=PALETTE[i%len(PALETTE)]+"28",
+                    fillcolor=fill_rgba,
                     hovertemplate=f"<b>{sym}</b><br>%{{theta}}: %{{r:.0f}}/100<extra></extra>",
                 ))
 
